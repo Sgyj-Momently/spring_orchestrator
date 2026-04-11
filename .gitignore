@@ -1,0 +1,15 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Gradle
+.gradle/
+build/
+out/
+
+# Java
+*.class
+hs_err_pid*
+
+# Logs
+*.log
