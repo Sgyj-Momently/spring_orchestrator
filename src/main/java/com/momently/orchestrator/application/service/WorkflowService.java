@@ -1,9 +1,9 @@
 package com.momently.orchestrator.application.service;
 
-import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.application.port.in.AdvanceWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.GetWorkflowUseCase;
+import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
@@ -34,11 +34,11 @@ public class WorkflowService implements CreateWorkflowUseCase, GetWorkflowUseCas
     }
 
     @Override
-    public Workflow createWorkflow(CreateWorkflowRequest request) {
+    public Workflow createWorkflow(CreateWorkflowCommand command) {
         Workflow workflow = new Workflow(
             UUID.randomUUID(),
-            request.projectId(),
-            request.groupingStrategy(),
+            command.projectId(),
+            command.groupingStrategy(),
             WorkflowStatus.CREATED
         );
         return workflowRepository.save(workflow);
