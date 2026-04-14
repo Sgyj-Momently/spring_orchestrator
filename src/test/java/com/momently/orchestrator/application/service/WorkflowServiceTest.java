@@ -3,7 +3,7 @@ package com.momently.orchestrator.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
+import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
@@ -27,7 +27,9 @@ class WorkflowServiceTest {
             new WorkflowStateMachine()
         );
 
-        Workflow workflow = workflowService.createWorkflow(new CreateWorkflowRequest("project-001", "LOCATION_BASED"));
+        Workflow workflow = workflowService.createWorkflow(
+            new CreateWorkflowCommand("project-001", "LOCATION_BASED")
+        );
 
         assertThat(workflow.getStatus()).isEqualTo(WorkflowStatus.CREATED);
     }

@@ -4,6 +4,7 @@ import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowResponse;
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.GetWorkflowUseCase;
+import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
 import com.momently.orchestrator.domain.Workflow;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -51,7 +52,9 @@ public class WorkflowController {
     public ResponseEntity<EntityModel<WorkflowResponse>> createWorkflow(
         @Valid @RequestBody CreateWorkflowRequest request
     ) {
-        Workflow workflow = createWorkflowUseCase.createWorkflow(request);
+        Workflow workflow = createWorkflowUseCase.createWorkflow(
+            new CreateWorkflowCommand(request.projectId(), request.groupingStrategy())
+        );
         return ResponseEntity.ok(toModel(workflow));
     }
 

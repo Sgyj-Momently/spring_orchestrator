@@ -1,6 +1,6 @@
 package com.momently.orchestrator.application.port.in;
 
-import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
+import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
 import com.momently.orchestrator.domain.Workflow;
 
 /**
@@ -11,8 +11,8 @@ public interface CreateWorkflowUseCase {
     /**
      * Creates a workflow and returns the created aggregate.
      *
-     * @param request workflow creation request
+     * @param command workflow creation command
      * @return created workflow aggregate
      */
-    Workflow createWorkflow(CreateWorkflowRequest request);
+    Workflow createWorkflow(CreateWorkflowCommand command);
 }
