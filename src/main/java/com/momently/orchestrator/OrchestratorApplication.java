@@ -1,5 +1,6 @@
 package com.momently.orchestrator;
 
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -7,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Spring Boot entry point for the workflow orchestrator application.
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class OrchestratorApplication {
 
     /**
