@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.GetWorkflowUseCase;
+import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.UUID;
@@ -35,6 +36,9 @@ class WorkflowControllerTest {
     @MockBean
     private GetWorkflowUseCase getWorkflowUseCase;
 
+    @MockBean
+    private RunWorkflowUseCase runWorkflowUseCase;
+
     @Test
     @DisplayName("워크플로 생성 요청을 받아 HATEOAS 응답을 반환한다")
     void createsWorkflow() throws Exception {
@@ -60,7 +64,8 @@ class WorkflowControllerTest {
             .andExpect(jsonPath("$.projectId").value("project-001"))
             .andExpect(jsonPath("$.groupingStrategy").value("LOCATION_BASED"))
             .andExpect(jsonPath("$.status").value("CREATED"))
-            .andExpect(jsonPath("$._links.self.href").exists());
+            .andExpect(jsonPath("$._links.self.href").exists())
+            .andExpect(jsonPath("$._links.run.href").exists());
     }
 
     @Test
@@ -95,6 +100,29 @@ class WorkflowControllerTest {
             .andExpect(jsonPath("$.projectId").value("project-002"))
             .andExpect(jsonPath("$.groupingStrategy").value("TIME_BASED"))
             .andExpect(jsonPath("$.status").value("PHOTO_GROUPED"))
-            .andExpect(jsonPath("$._links.self.href").exists());
+            .andExpect(jsonPath("$._links.self.href").exists())
+            .andExpect(jsonPath("$._links.run.href").exists());
+    }
+
+    @Test
+    @DisplayName("워크플로 실행 요청을 받아 실행 결과를 반환한다")
+    void runsWorkflow() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f12");
+        Workflow workflow = new Workflow(
+            workflowId,
+            "project-003",
+            "SCENE_BASED",
+            WorkflowStatus.PHOTO_GROUPED
+        );
+        when(runWorkflowUseCase.runWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.workflowId").value(workflowId.toString()))
+            .andExpect(jsonPath("$.projectId").value("project-003"))
+            .andExpect(jsonPath("$.groupingStrategy").value("SCENE_BASED"))
+            .andExpect(jsonPath("$.status").value("PHOTO_GROUPED"))
+            .andExpect(jsonPath("$._links.self.href").exists())
+            .andExpect(jsonPath("$._links.run.href").exists());
     }
 }
