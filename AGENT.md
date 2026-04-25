@@ -62,6 +62,13 @@
 - JavaDoc은 “무엇을 하는가”와 “왜 존재하는가”를 드러내야 한다.
 - 도메인 개념과 상태 전이는 JavaDoc으로 의미를 분명히 남긴다.
 - private helper는 무조건 JavaDoc을 강제하지 않지만, 복잡한 로직은 짧은 주석 또는 명확한 이름으로 설명한다.
+- JavaDoc은 한 줄 요약으로 끝내지 않는다. 최소한 책임, 계층상 존재 이유, 주요 입력/출력 의미를 함께 설명한다.
+- adapter JavaDoc에는 어떤 외부 시스템/프로필/실행 방식을 감싸는지, 실패가 어떤 예외나 상태로 전파되는지 적는다.
+- port JavaDoc에는 application 계층이 외부 구현을 몰라도 되게 하는 경계라는 점과 구현체가 지켜야 할 계약을 적는다.
+- 설정 properties JavaDoc에는 공개 API로 받지 않는 내부 설정이라는 점, 기본값 또는 운영에서 바꿔야 하는 값을 적는다.
+- record JavaDoc의 `@param`에는 단순 타입 설명이 아니라 후속 단계에서 어떻게 쓰이는 값인지 적는다.
+- override method라도 외부 호출 지점이거나 부작용이 있으면 JavaDoc을 다시 작성해 구현체별 동작과 실패 조건을 명시한다.
+- JavaDoc이 코드와 달라졌다고 느껴지면 코드 변경과 같은 커밋에서 반드시 같이 갱신한다.
 
 ## 6. HATEOAS 원칙
 
@@ -116,3 +123,11 @@
 - 도메인 계층에서 스프링 애너테이션 사용 금지
 - 외부 에이전트 HTTP 호출을 application/domain에서 직접 수행 금지
 - 구조 테스트 없이 패키지 경계 변경 금지
+
+## 11. Git Flow 적용
+
+- 이 프로젝트의 기능 작업은 `main`에서 직접 진행하지 않는다.
+- 스프링 오케스트레이터 관련 개발은 기본적으로 `feature/orchestrator-*` 브랜치에서 시작한다.
+- 운영 장애 대응이 아닌 이상 `hotfix/*`를 남용하지 않는다.
+- PR 전에는 최소 `gradle test jacocoTestReport jacocoTestCoverageVerification` 기준의 검증 상태를 확인한다.
+- 문서에서 참조하는 전역 규칙은 루트의 [Agent.md](../Agent.md)를 기준으로 유지한다.
