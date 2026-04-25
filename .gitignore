@@ -1,12 +1,13 @@
 .DS_Store
 .idea/
 .vscode/
+.codex-skill-build/
 
 # Gradle
 .gradle/
 .gradle-home/
 build/
-out/
+/out/
 
 # Java
 *.class
