@@ -3,6 +3,17 @@ spring:
     default: memory
 
 agents:
+  photo-info:
+    pipeline:
+      python-executable: python3
+      script-path: ../photo_exif_llm_pipeline/src/run_pipeline.py
+      input-root: ../photo_exif_llm_pipeline/input_photos
+      output-root: ../photo_exif_llm_pipeline/output/orchestrator
+      ollama-base-url: http://localhost:11434
+      vision-model: llava
+      writer-model: qwen2.5:14b
+      ollama-timeout-seconds: 180
+      skip-blog: true
   photo-grouping:
     base-url: http://127.0.0.1:8000
     endpoint: /api/v1/photo-groups
