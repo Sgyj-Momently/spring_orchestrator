@@ -36,8 +36,11 @@ spring_orchestrator/
 ## 현재 상태
 
 - `WorkflowStateMachine`, `WorkflowRunner`, `WorkflowService`가 구현되어 있다.
-- 웹 계층은 `WorkflowController` 기준으로 생성/조회 API가 있다.
+- 웹 계층은 `WorkflowController` 기준으로 생성/조회/실행 API가 있다.
 - 기본 저장소는 `memory` 프로필의 `InMemoryWorkflowRepository`다.
+- `memory` 프로필에서는 실제 에이전트 HTTP 연동 전까지 stub outbound adapter로 실행 흐름을 검증한다.
+- `local-photo-info` 프로필에서는 `LocalPhotoInfoPipelineAdapter`가 CLI 기반 사진 정보 추출 파이프라인을 실행한다.
+- `memory` 외 프로필에서는 `PhotoGroupingAgentClient`가 FastAPI 그룹화 에이전트를 HTTP로 호출한다.
 - `postgres` 프로필용 JPA persistence adapter가 추가되어 있다.
 - 테스트와 JaCoCo 커버리지 검증이 통과한다.
 - 현재 라인 커버리지는 `90% 이상`을 유지하도록 Gradle 검증이 걸려 있다.
