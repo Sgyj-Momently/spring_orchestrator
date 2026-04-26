@@ -22,6 +22,7 @@ class InMemoryWorkflowRepositoryTest {
             workflowId,
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
 

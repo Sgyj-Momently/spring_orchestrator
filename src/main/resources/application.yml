@@ -1,6 +1,11 @@
 spring:
   profiles:
-    default: memory
+    default: memory,stub-agents
+
+logging:
+  level:
+    org.springframework.web: INFO
+    org.springframework.web.client: INFO
 
 agents:
   photo-info:
@@ -10,10 +15,13 @@ agents:
       input-root: ../photo_exif_llm_pipeline/input_photos
       output-root: ../photo_exif_llm_pipeline/output/orchestrator
       ollama-base-url: http://localhost:11434
-      vision-model: llava
+      vision-model: qwen2.5vl:7b
       writer-model: qwen2.5:14b
       ollama-timeout-seconds: 180
       skip-blog: true
   photo-grouping:
     base-url: http://127.0.0.1:8000
     endpoint: /api/v1/photo-groups
+  hero-photo:
+    base-url: http://127.0.0.1:8200
+    endpoint: /api/v1/hero-photos

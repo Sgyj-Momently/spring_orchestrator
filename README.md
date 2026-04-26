@@ -38,9 +38,9 @@ spring_orchestrator/
 - `WorkflowStateMachine`, `WorkflowRunner`, `WorkflowService`가 구현되어 있다.
 - 웹 계층은 `WorkflowController` 기준으로 생성/조회/실행 API가 있다.
 - 기본 저장소는 `memory` 프로필의 `InMemoryWorkflowRepository`다.
-- `memory` 프로필에서는 실제 에이전트 HTTP 연동 전까지 stub outbound adapter로 실행 흐름을 검증한다.
+- `stub-agents` 프로필에서는 실제 에이전트 HTTP 연동 전까지 stub outbound adapter로 실행 흐름을 검증한다.
 - `local-photo-info` 프로필에서는 `LocalPhotoInfoPipelineAdapter`가 CLI 기반 사진 정보 추출 파이프라인을 실행한다.
-- `memory` 외 프로필에서는 `PhotoGroupingAgentClient`가 FastAPI 그룹화 에이전트를 HTTP로 호출한다.
+- `stub-agents`가 꺼진 프로필에서는 `PhotoGroupingAgentClient`가 FastAPI 그룹화 에이전트를 HTTP로 호출한다.
 - `postgres` 프로필용 JPA persistence adapter가 추가되어 있다.
 - 테스트와 JaCoCo 커버리지 검증이 통과한다.
 - 현재 라인 커버리지는 `90% 이상`을 유지하도록 Gradle 검증이 걸려 있다.
@@ -55,8 +55,25 @@ env GRADLE_USER_HOME=.gradle-home GRADLE_OPTS='-Dorg.gradle.native=false' gradle
 
 ## 프로필
 
-- 기본 프로필: `memory`
+- 기본 프로필: `memory,stub-agents`
 - PostgreSQL 연동 확인용 프로필: `postgres`
+- 로컬 사진 정보 파이프라인 + 실제 그룹화 HTTP 호출: `memory,local-photo-info`
+- 전체 대역 실행: `memory,stub-agents`
+
+`local-photo-info`에서 `agents.photo-info.pipeline.skip-blog=false`로 실행하면
+`photo_exif_llm_pipeline`이 Claude Code CLI를 `--print` 모드로 호출해 `blog.md`를 생성한다.
+이 경우 `ANTHROPIC_API_KEY` 대신 로컬 `claude` CLI 설치와 로그인이 필요하다.
+
+사진 정보 bundle에 `exclude_from_public_outputs=true`가 붙은 사진은 그룹화 에이전트 요청에서 제외한다.
+신분증, 주민등록번호, 면허번호, 상세 주소 등은 `photo_exif_llm_pipeline`에서 감지해 마스킹하고
+`excluded_photos`에 최소 기록만 남긴다.
+
+워크플로 실행 결과는 응답에 주요 artifact 경로를 함께 노출한다.
+
+- `photoInfoBundlePath`: 사진 정보 bundle JSON
+- `blogPath`: Claude Code CLI가 생성한 블로그 Markdown, 생성하지 않았으면 null
+- `groupingResultPath`: FastAPI 그룹화 응답 전체를 저장한 JSON
+- `photoCount`, `groupCount`: 공개 사진 수와 그룹 수
 
 ## 다른 PC에서 바로 시작하는 순서
 
