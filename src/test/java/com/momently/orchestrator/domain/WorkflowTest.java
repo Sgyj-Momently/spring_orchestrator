@@ -21,6 +21,7 @@ class WorkflowTest {
             workflowId,
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
 
@@ -37,6 +38,7 @@ class WorkflowTest {
             UUID.randomUUID(),
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
 
@@ -52,6 +54,7 @@ class WorkflowTest {
             UUID.randomUUID(),
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.PHOTO_GROUPING
         );
 
@@ -63,12 +66,41 @@ class WorkflowTest {
     }
 
     @Test
+    @DisplayName("단계별 artifact 경로와 요약 카운트를 기록한다")
+    void recordsStepArtifacts() {
+        Workflow workflow = new Workflow(
+            UUID.randomUUID(),
+            "project-001",
+            "LOCATION_BASED",
+            90,
+            WorkflowStatus.PHOTO_GROUPING
+        );
+
+        workflow.recordPhotoInfoArtifacts(
+            11,
+            "output/project-001/bundles/bundle.json",
+            "output/project-001/blog.md"
+        );
+        workflow.recordGroupingArtifacts(3, "output/project-001/grouping/grouping-result.json");
+        workflow.recordHeroPhotoArtifacts(3, "output/project-001/hero-photo/hero-result.json");
+
+        assertThat(workflow.getPhotoCount()).isEqualTo(11);
+        assertThat(workflow.getGroupCount()).isEqualTo(3);
+        assertThat(workflow.getHeroPhotoCount()).isEqualTo(3);
+        assertThat(workflow.getPhotoInfoBundlePath()).isEqualTo("output/project-001/bundles/bundle.json");
+        assertThat(workflow.getBlogPath()).isEqualTo("output/project-001/blog.md");
+        assertThat(workflow.getGroupingResultPath()).isEqualTo("output/project-001/grouping/grouping-result.json");
+        assertThat(workflow.getHeroPhotoResultPath()).isEqualTo("output/project-001/hero-photo/hero-result.json");
+    }
+
+    @Test
     @DisplayName("필수 값이 없으면 생성할 수 없다")
     void rejectsNullRequiredValues() {
         assertThatThrownBy(() -> new Workflow(
             null,
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         )).isInstanceOf(NullPointerException.class);
     }

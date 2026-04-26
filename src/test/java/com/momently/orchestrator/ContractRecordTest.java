@@ -24,13 +24,22 @@ class ContractRecordTest {
     @DisplayName("요청/응답 및 결과 record는 전달한 값을 그대로 노출한다")
     void exposesRecordValues() {
         UUID workflowId = UUID.randomUUID();
-        CreateWorkflowRequest request = new CreateWorkflowRequest("project-001", "LOCATION_BASED");
-        CreateWorkflowCommand command = new CreateWorkflowCommand("project-001", "LOCATION_BASED");
+        CreateWorkflowRequest request = new CreateWorkflowRequest("project-001", "LOCATION_BASED", 90);
+        CreateWorkflowCommand command = new CreateWorkflowCommand("project-001", "LOCATION_BASED", 90);
         WorkflowResponse response = new WorkflowResponse(
             workflowId,
             "project-001",
             "LOCATION_BASED",
-            WorkflowStatus.CREATED
+            WorkflowStatus.CREATED,
+            10,
+            3,
+            2,
+            "bundle.json",
+            "blog.md",
+            "grouping-result.json",
+            "hero-result.json",
+            null,
+            null
         );
         PhotoInfoResult photoInfoResult = new PhotoInfoResult(10, "bundle.json");
         PhotoGroupingResult photoGroupingResult = new PhotoGroupingResult("TIME_BASED", 3);
@@ -39,6 +48,8 @@ class ContractRecordTest {
         assertThat(command.groupingStrategy()).isEqualTo("LOCATION_BASED");
         assertThat(response.workflowId()).isEqualTo(workflowId);
         assertThat(response.status()).isEqualTo(WorkflowStatus.CREATED);
+        assertThat(response.photoInfoBundlePath()).isEqualTo("bundle.json");
+        assertThat(response.groupingResultPath()).isEqualTo("grouping-result.json");
         assertThat(photoInfoResult.photoCount()).isEqualTo(10);
         assertThat(photoGroupingResult.groupCount()).isEqualTo(3);
     }

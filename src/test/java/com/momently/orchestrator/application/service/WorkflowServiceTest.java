@@ -28,7 +28,7 @@ class WorkflowServiceTest {
         );
 
         Workflow workflow = workflowService.createWorkflow(
-            new CreateWorkflowCommand("project-001", "LOCATION_BASED")
+            new CreateWorkflowCommand("project-001", "LOCATION_BASED", 90)
         );
 
         assertThat(workflow.getStatus()).isEqualTo(WorkflowStatus.CREATED);
@@ -42,6 +42,7 @@ class WorkflowServiceTest {
             UUID.randomUUID(),
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
         repository.save(workflow);
@@ -67,6 +68,7 @@ class WorkflowServiceTest {
             UUID.randomUUID(),
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
         repository.save(workflow);
