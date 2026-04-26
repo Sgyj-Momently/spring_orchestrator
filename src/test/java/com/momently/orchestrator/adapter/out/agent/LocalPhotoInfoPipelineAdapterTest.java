@@ -62,6 +62,7 @@ class LocalPhotoInfoPipelineAdapterTest {
         assertThat(result.bundlePath()).isEqualTo(
             outputRoot.resolve("project-001").resolve("bundles").resolve("bundle.json").toString()
         );
+        assertThat(result.blogPath()).isNull();
     }
 
     @Test
@@ -77,12 +78,14 @@ class LocalPhotoInfoPipelineAdapterTest {
             command -> {
                 capturedCommand.addAll(command);
                 writeBundleUnchecked(outputRoot.resolve("project-001").resolve("bundles").resolve("bundle.json"), 1);
+                writeTextUnchecked(outputRoot.resolve("project-001").resolve("blog.md"), "# 블로그");
             }
         );
 
-        adapter.extractPhotoInfo("project-001");
+        PhotoInfoResult result = adapter.extractPhotoInfo("project-001");
 
         assertThat(capturedCommand).doesNotContain("--skip-blog");
+        assertThat(result.blogPath()).isEqualTo(outputRoot.resolve("project-001").resolve("blog.md").toString());
     }
 
     @Test
@@ -139,6 +142,75 @@ class LocalPhotoInfoPipelineAdapterTest {
         assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("photo_count");
+    }
+
+    @Test
+    @DisplayName("bundle JSON에 photos가 없으면 실패로 처리한다")
+    void failsWhenBundleMissingPhotos() throws IOException {
+        Path inputRoot = tempDir.resolve("input");
+        Path outputRoot = tempDir.resolve("output");
+        Files.createDirectories(inputRoot.resolve("project-001"));
+        Path bundlePath = outputRoot.resolve("project-001").resolve("bundles").resolve("bundle.json");
+        Files.createDirectories(bundlePath.getParent());
+        Files.writeString(bundlePath, "{\"photo_count\":0}");
+        LocalPhotoInfoPipelineAdapter adapter = new LocalPhotoInfoPipelineAdapter(
+            properties(inputRoot, outputRoot, true),
+            new ObjectMapper(),
+            command -> {
+            }
+        );
+
+        assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("photos");
+    }
+
+    @Test
+    @DisplayName("bundle JSON의 photos가 배열이 아니면 실패로 처리한다")
+    void failsWhenBundlePhotosIsNotArray() throws IOException {
+        Path inputRoot = tempDir.resolve("input");
+        Path outputRoot = tempDir.resolve("output");
+        Files.createDirectories(inputRoot.resolve("project-001"));
+        writeRawBundle(outputRoot, """
+            {
+              "photo_count": 0,
+              "photos": {}
+            }
+            """);
+        LocalPhotoInfoPipelineAdapter adapter = new LocalPhotoInfoPipelineAdapter(
+            properties(inputRoot, outputRoot, true),
+            new ObjectMapper(),
+            command -> {
+            }
+        );
+
+        assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("photos must be an array");
+    }
+
+    @Test
+    @DisplayName("bundle JSON의 photo_count와 photos 길이가 다르면 실패로 처리한다")
+    void failsWhenBundlePhotoCountDoesNotMatchPhotosLength() throws IOException {
+        Path inputRoot = tempDir.resolve("input");
+        Path outputRoot = tempDir.resolve("output");
+        Files.createDirectories(inputRoot.resolve("project-001"));
+        writeRawBundle(outputRoot, """
+            {
+              "photo_count": 2,
+              "photos": [ { "file_name": "a.jpg" } ]
+            }
+            """);
+        LocalPhotoInfoPipelineAdapter adapter = new LocalPhotoInfoPipelineAdapter(
+            properties(inputRoot, outputRoot, true),
+            new ObjectMapper(),
+            command -> {
+            }
+        );
+
+        assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("does not match photos.length");
     }
 
     @Test
@@ -205,7 +277,8 @@ class LocalPhotoInfoPipelineAdapterTest {
                 "qwen2.5vl:7b",
                 "gemma4",
                 60,
-                true
+                true,
+                false
             ),
             new ObjectMapper()
         );
@@ -236,7 +309,8 @@ class LocalPhotoInfoPipelineAdapterTest {
                 "qwen2.5vl:7b",
                 "gemma4",
                 60,
-                true
+                true,
+                false
             ),
             new ObjectMapper()
         );
@@ -257,7 +331,8 @@ class LocalPhotoInfoPipelineAdapterTest {
             "qwen2.5vl:7b",
             "gemma4",
             60,
-            skipBlog
+            skipBlog,
+            false
         );
     }
 
@@ -266,9 +341,9 @@ class LocalPhotoInfoPipelineAdapterTest {
         Files.writeString(bundlePath, """
             {
               "photo_count": %d,
-              "photos": []
+              "photos": %s
             }
-            """.formatted(photoCount));
+            """.formatted(photoCount, dummyPhotosJson(photoCount)));
     }
 
     private void writeRawBundle(Path outputRoot, String content) throws IOException {
@@ -277,9 +352,34 @@ class LocalPhotoInfoPipelineAdapterTest {
         Files.writeString(bundlePath, content);
     }
 
+    private String dummyPhotosJson(int count) {
+        if (count <= 0) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("[");
+        for (int index = 0; index < count; index++) {
+            if (index > 0) {
+                builder.append(",");
+            }
+            builder.append("{\"file_name\":\"IMG_").append(index).append(".jpg\"}");
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
     private void writeBundleUnchecked(Path bundlePath, int photoCount) {
         try {
             writeBundle(bundlePath, photoCount);
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private void writeTextUnchecked(Path path, String content) {
+        try {
+            Files.createDirectories(path.getParent());
+            Files.writeString(path, content);
         } catch (IOException exception) {
             throw new IllegalStateException(exception);
         }

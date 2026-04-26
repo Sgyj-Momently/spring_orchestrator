@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +47,7 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      * @param properties Python 실행 파일, 입력/출력 루트, 모델명 등 내부 실행 설정
      * @param objectMapper bundle JSON에서 {@code photo_count}를 읽기 위한 JSON mapper
      */
+    @Autowired
     public LocalPhotoInfoPipelineAdapter(
         PhotoInfoPipelineProperties properties,
         ObjectMapper objectMapper
@@ -80,19 +82,36 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         Path inputDir = Path.of(properties.inputRoot()).resolve(projectId);
         Path outputDir = Path.of(properties.outputRoot()).resolve(projectId);
         Path bundlePath = outputDir.resolve(BUNDLE_FILE_RELATIVE);
+        Path blogPath = outputDir.resolve("blog.md");
 
         if (!Files.isDirectory(inputDir)) {
             throw new IllegalStateException(
-                "Photo input directory does not exist or is not a directory: " + inputDir
+                "Photo input directory does not exist or is not a directory: "
+                    + inputDir
+                    + " (projectId="
+                    + projectId
+                    + ", outputDir="
+                    + outputDir
+                    + ")"
             );
         }
 
         commandExecutor.execute(buildCommand(inputDir, outputDir));
 
         if (!Files.isRegularFile(bundlePath)) {
-            throw new IllegalStateException("Photo info bundle not found at expected path: " + bundlePath);
+            throw new IllegalStateException(
+                "Photo info bundle not found at expected path: "
+                    + bundlePath
+                    + " (projectId="
+                    + projectId
+                    + ", inputDir="
+                    + inputDir
+                    + ", outputDir="
+                    + outputDir
+                    + ")"
+            );
         }
-        return readResult(bundlePath);
+        return readResult(bundlePath, blogPath);
     }
 
     /**
@@ -124,6 +143,9 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         if (properties.skipBlog()) {
             command.add("--skip-blog");
         }
+        if (properties.force()) {
+            command.add("--force");
+        }
         return command;
     }
 
@@ -136,7 +158,7 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      * @param bundlePath 파이프라인이 생성해야 하는 bundle JSON 경로
      * @return bundle의 사진 수와 artifact 경로
      */
-    private PhotoInfoResult readResult(Path bundlePath) {
+    private PhotoInfoResult readResult(Path bundlePath, Path blogPath) {
         try {
             JsonNode bundle = objectMapper.readTree(bundlePath.toFile());
             JsonNode countNode = bundle.get("photo_count");
@@ -150,7 +172,26 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
             if (photoCount < 0) {
                 throw new IllegalStateException("bundle JSON field photo_count must be non-negative: " + bundlePath);
             }
-            return new PhotoInfoResult(photoCount, bundlePath.toString());
+            JsonNode photosNode = bundle.get("photos");
+            if (photosNode == null || photosNode.isNull()) {
+                throw new IllegalStateException("bundle JSON missing required field photos: " + bundlePath);
+            }
+            if (!photosNode.isArray()) {
+                throw new IllegalStateException("bundle JSON field photos must be an array: " + bundlePath);
+            }
+            int photosSize = photosNode.size();
+            if (photosSize != photoCount) {
+                throw new IllegalStateException(
+                    "bundle JSON photo_count does not match photos.length (photo_count="
+                        + photoCount
+                        + ", photos.length="
+                        + photosSize
+                        + "): "
+                        + bundlePath
+                );
+            }
+            String blogArtifactPath = Files.isRegularFile(blogPath) ? blogPath.toString() : null;
+            return new PhotoInfoResult(photoCount, bundlePath.toString(), blogArtifactPath);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read photo info bundle: " + bundlePath, exception);
         }
@@ -212,41 +253,61 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
             } catch (IOException exception) {
                 throw new IllegalStateException("Failed to create temp file for photo info pipeline log", exception);
             }
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            processBuilder.redirectErrorStream(true);
+            processBuilder.redirectOutput(logFile.toFile());
             try {
-                ProcessBuilder processBuilder = new ProcessBuilder(command);
-                processBuilder.redirectErrorStream(true);
-                processBuilder.redirectOutput(logFile.toFile());
-                try {
-                    Process process = processBuilder.start();
-                    boolean completed = process.waitFor(processTimeout.toSeconds(), TimeUnit.SECONDS);
-                    if (!completed) {
-                        process.destroyForcibly();
-                        String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
-                        throw new IllegalStateException(
-                            "Photo info pipeline timed out after "
-                                + processTimeout.toSeconds()
-                                + "s. Log tail: "
-                                + tail
-                        );
-                    }
-                    int exitCode = process.exitValue();
-                    if (exitCode != 0) {
-                        String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
-                        throw new IllegalStateException(
-                            "Photo info pipeline failed with exit code " + exitCode + ". Log tail: " + tail
-                        );
-                    }
-                } catch (IOException exception) {
-                    throw new IllegalStateException("Failed to start photo info pipeline", exception);
-                } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException("Photo info pipeline was interrupted", exception);
+                Process process = processBuilder.start();
+                boolean completed = process.waitFor(processTimeout.toSeconds(), TimeUnit.SECONDS);
+                if (!completed) {
+                    process.destroyForcibly();
+                    String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
+                    throw new IllegalStateException(
+                        "Photo info pipeline timed out after "
+                            + processTimeout.toSeconds()
+                            + "s. Command: "
+                            + String.join(" ", command)
+                            + ". Log file: "
+                            + logFile
+                            + ". Log tail: "
+                            + tail
+                    );
                 }
-            } finally {
+                int exitCode = process.exitValue();
+                if (exitCode != 0) {
+                    String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
+                    throw new IllegalStateException(
+                        "Photo info pipeline failed with exit code "
+                            + exitCode
+                            + ". Command: "
+                            + String.join(" ", command)
+                            + ". Log file: "
+                            + logFile
+                            + ". Log tail: "
+                            + tail
+                    );
+                }
                 try {
                     Files.deleteIfExists(logFile);
                 } catch (IOException ignored) {
                 }
+            } catch (IOException exception) {
+                throw new IllegalStateException(
+                    "Failed to start photo info pipeline. Command: "
+                        + String.join(" ", command)
+                        + ". Log file: "
+                        + logFile,
+                    exception
+                );
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(
+                    "Photo info pipeline was interrupted. Command: "
+                        + String.join(" ", command)
+                        + ". Log file: "
+                        + logFile,
+                    exception
+                );
             }
         }
 

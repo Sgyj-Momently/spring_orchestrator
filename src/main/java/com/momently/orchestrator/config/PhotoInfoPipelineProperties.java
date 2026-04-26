@@ -18,6 +18,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param writerModel bundle 요약에 사용할 텍스트 모델명
  * @param ollamaTimeoutSeconds Ollama 호출이 멈췄을 때 실패로 전환할 타임아웃 초
  * @param skipBlog 오케스트레이션 실행에서 선택적 블로그 생성 단계를 건너뛸지 여부
+ * @param force 기존 캐시(EXIF/photo summary)를 무시하고 재생성할지 여부
  */
 @ConfigurationProperties(prefix = "agents.photo-info.pipeline")
 public record PhotoInfoPipelineProperties(
@@ -29,7 +30,8 @@ public record PhotoInfoPipelineProperties(
     String visionModel,
     String writerModel,
     int ollamaTimeoutSeconds,
-    boolean skipBlog
+    boolean skipBlog,
+    boolean force
 ) {
 
     /**
@@ -44,7 +46,7 @@ public record PhotoInfoPipelineProperties(
         inputRoot = defaultIfBlank(inputRoot, "../photo_exif_llm_pipeline/input_photos");
         outputRoot = defaultIfBlank(outputRoot, "../photo_exif_llm_pipeline/output/orchestrator");
         ollamaBaseUrl = defaultIfBlank(ollamaBaseUrl, "http://localhost:11434");
-        visionModel = defaultIfBlank(visionModel, "llava");
+        visionModel = defaultIfBlank(visionModel, "qwen2.5vl:7b");
         writerModel = defaultIfBlank(writerModel, "qwen2.5:14b");
         if (ollamaTimeoutSeconds <= 0) {
             ollamaTimeoutSeconds = 180;

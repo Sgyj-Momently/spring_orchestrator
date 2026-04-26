@@ -22,7 +22,8 @@ class PhotoInfoPipelinePropertiesTest {
             null,
             null,
             0,
-            true
+            true,
+            false
         );
 
         assertThat(properties.pythonExecutable()).isEqualTo("python3");
@@ -30,10 +31,11 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.inputRoot()).isEqualTo("../photo_exif_llm_pipeline/input_photos");
         assertThat(properties.outputRoot()).isEqualTo("../photo_exif_llm_pipeline/output/orchestrator");
         assertThat(properties.ollamaBaseUrl()).isEqualTo("http://localhost:11434");
-        assertThat(properties.visionModel()).isEqualTo("llava");
+        assertThat(properties.visionModel()).isEqualTo("qwen2.5vl:7b");
         assertThat(properties.writerModel()).isEqualTo("qwen2.5:14b");
         assertThat(properties.ollamaTimeoutSeconds()).isEqualTo(180);
         assertThat(properties.skipBlog()).isTrue();
+        assertThat(properties.force()).isFalse();
     }
 
     @Test
@@ -48,7 +50,8 @@ class PhotoInfoPipelinePropertiesTest {
             "qwen2.5vl:7b",
             "gemma4",
             60,
-            false
+            false,
+            true
         );
 
         assertThat(properties.pythonExecutable()).isEqualTo("python");
@@ -60,5 +63,6 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.writerModel()).isEqualTo("gemma4");
         assertThat(properties.ollamaTimeoutSeconds()).isEqualTo(60);
         assertThat(properties.skipBlog()).isFalse();
+        assertThat(properties.force()).isTrue();
     }
 }
