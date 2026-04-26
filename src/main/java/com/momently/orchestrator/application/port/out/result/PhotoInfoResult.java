@@ -9,9 +9,21 @@ package com.momently.orchestrator.application.port.out.result;
  *
  * @param photoCount 파이프라인이 처리한 사진 수
  * @param bundlePath 그룹화 단계와 디버깅에서 참조할 bundle JSON artifact 경로
+ * @param blogPath Claude Code CLI가 생성한 블로그 Markdown artifact 경로, 생성하지 않았으면 null
  */
 public record PhotoInfoResult(
     int photoCount,
-    String bundlePath
+    String bundlePath,
+    String blogPath
 ) {
+
+    /**
+     * 블로그 생성 전 또는 대역 구현에서 bundle 경로만 반환할 때 쓰는 축약 생성자다.
+     *
+     * @param photoCount 파이프라인이 처리한 사진 수
+     * @param bundlePath 그룹화 단계와 디버깅에서 참조할 bundle JSON artifact 경로
+     */
+    public PhotoInfoResult(int photoCount, String bundlePath) {
+        this(photoCount, bundlePath, null);
+    }
 }

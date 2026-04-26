@@ -9,9 +9,21 @@ package com.momently.orchestrator.application.port.out.result;
  *
  * @param groupingStrategy 그룹화 에이전트가 실제 적용한 enum 전략 값
  * @param groupCount 후속 대표 사진 선택 단계가 예상할 수 있는 생성 그룹 수
+ * @param resultPath FastAPI 그룹화 응답 전체를 저장한 JSON artifact 경로
  */
 public record PhotoGroupingResult(
     String groupingStrategy,
-    int groupCount
+    int groupCount,
+    String resultPath
 ) {
+
+    /**
+     * 그룹화 응답 artifact가 아직 없는 대역 구현에서 쓰는 축약 생성자다.
+     *
+     * @param groupingStrategy 그룹화 에이전트가 실제 적용한 enum 전략 값
+     * @param groupCount 후속 대표 사진 선택 단계가 예상할 수 있는 생성 그룹 수
+     */
+    public PhotoGroupingResult(String groupingStrategy, int groupCount) {
+        this(groupingStrategy, groupCount, null);
+    }
 }

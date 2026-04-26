@@ -3,7 +3,7 @@ package com.momently.orchestrator.adapter.out.agent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
-import java.util.Map;
+import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,13 +13,19 @@ import org.junit.jupiter.api.Test;
 class StubPhotoGroupingAgentAdapterTest {
 
     @Test
-    @DisplayName("payload의 그룹화 전략을 결과에 반영한다")
-    void returnsGroupingStrategyFromPayload() {
+    @DisplayName("워크플로의 그룹화 전략을 결과에 반영한다")
+    void returnsGroupingStrategyFromWorkflow() {
         StubPhotoGroupingAgentAdapter adapter = new StubPhotoGroupingAgentAdapter();
 
-        PhotoGroupingResult result = adapter.groupPhotos(Map.of("grouping_strategy", "TIME_BASED"));
+        PhotoGroupingResult result = adapter.groupPhotos(
+            "project-001",
+            "TIME_BASED",
+            90,
+            new PhotoInfoResult(0, "artifacts/photo-info/project-001/bundle.json")
+        );
 
         assertThat(result.groupingStrategy()).isEqualTo("TIME_BASED");
         assertThat(result.groupCount()).isZero();
+        assertThat(result.resultPath()).isEqualTo("artifacts/photo-grouping/project-001/grouping-result.json");
     }
 }
