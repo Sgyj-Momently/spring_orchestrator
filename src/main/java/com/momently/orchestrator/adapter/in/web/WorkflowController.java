@@ -58,7 +58,7 @@ public class WorkflowController {
         @Valid @RequestBody CreateWorkflowRequest request
     ) {
         Workflow workflow = createWorkflowUseCase.createWorkflow(
-            new CreateWorkflowCommand(request.projectId(), request.groupingStrategy())
+            new CreateWorkflowCommand(request.projectId(), request.groupingStrategy(), request.resolvedTimeWindowMinutes())
         );
         return ResponseEntity.ok(toModel(workflow));
     }
@@ -76,15 +76,21 @@ public class WorkflowController {
     }
 
     /**
-     * Runs a workflow from its current executable state.
+     * 워크플로 실행을 비동기로 시작하고 즉시 202 Accepted를 반환한다.
+     *
+     * <p>실행 결과는 Location 헤더가 가리키는 GET 엔드포인트로 상태를 폴링해 확인한다.</p>
      *
      * @param workflowId workflow identifier
-     * @return workflow response after execution
+     * @return 202 Accepted with Location header pointing to the workflow status endpoint
      */
     @PostMapping("/{workflowId}/run")
-    public ResponseEntity<EntityModel<WorkflowResponse>> runWorkflow(@PathVariable UUID workflowId) {
-        Workflow workflow = runWorkflowUseCase.runWorkflow(workflowId);
-        return ResponseEntity.ok(toModel(workflow));
+    public ResponseEntity<Void> runWorkflow(@PathVariable UUID workflowId) {
+        runWorkflowUseCase.runWorkflow(workflowId);
+        return ResponseEntity.accepted()
+            .location(WebMvcLinkBuilder.linkTo(
+                WebMvcLinkBuilder.methodOn(WorkflowController.class).getWorkflow(workflowId)
+            ).toUri())
+            .build();
     }
 
     private EntityModel<WorkflowResponse> toModel(Workflow workflow) {
@@ -92,7 +98,16 @@ public class WorkflowController {
             workflow.getWorkflowId(),
             workflow.getProjectId(),
             workflow.getGroupingStrategy(),
-            workflow.getStatus()
+            workflow.getStatus(),
+            workflow.getPhotoCount(),
+            workflow.getGroupCount(),
+            workflow.getHeroPhotoCount(),
+            workflow.getPhotoInfoBundlePath(),
+            workflow.getBlogPath(),
+            workflow.getGroupingResultPath(),
+            workflow.getHeroPhotoResultPath(),
+            workflow.getLastFailedStep(),
+            workflow.getLastErrorMessage()
         );
         return EntityModel.of(
             response,

@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,6 +48,7 @@ class WorkflowControllerTest {
             workflowId,
             "project-001",
             "LOCATION_BASED",
+            90,
             WorkflowStatus.CREATED
         );
         when(createWorkflowUseCase.createWorkflow(any())).thenReturn(workflow);
@@ -90,6 +92,7 @@ class WorkflowControllerTest {
             workflowId,
             "project-002",
             "TIME_BASED",
+            90,
             WorkflowStatus.PHOTO_GROUPED
         );
         when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
@@ -105,24 +108,12 @@ class WorkflowControllerTest {
     }
 
     @Test
-    @DisplayName("워크플로 실행 요청을 받아 실행 결과를 반환한다")
+    @DisplayName("워크플로 실행 요청을 받아 202 Accepted와 상태 조회용 Location 헤더를 반환한다")
     void runsWorkflow() throws Exception {
         UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f12");
-        Workflow workflow = new Workflow(
-            workflowId,
-            "project-003",
-            "SCENE_BASED",
-            WorkflowStatus.PHOTO_GROUPED
-        );
-        when(runWorkflowUseCase.runWorkflow(workflowId)).thenReturn(workflow);
 
         mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.workflowId").value(workflowId.toString()))
-            .andExpect(jsonPath("$.projectId").value("project-003"))
-            .andExpect(jsonPath("$.groupingStrategy").value("SCENE_BASED"))
-            .andExpect(jsonPath("$.status").value("PHOTO_GROUPED"))
-            .andExpect(jsonPath("$._links.self.href").exists())
-            .andExpect(jsonPath("$._links.run.href").exists());
+            .andExpect(status().isAccepted())
+            .andExpect(header().exists("Location"));
     }
 }
