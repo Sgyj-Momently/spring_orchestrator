@@ -39,6 +39,7 @@ public class WorkflowService implements CreateWorkflowUseCase, GetWorkflowUseCas
             UUID.randomUUID(),
             command.projectId(),
             command.groupingStrategy(),
+            command.timeWindowMinutes(),
             WorkflowStatus.CREATED
         );
         return workflowRepository.save(workflow);
