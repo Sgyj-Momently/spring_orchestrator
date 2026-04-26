@@ -6,9 +6,13 @@ import com.momently.orchestrator.application.port.out.PhotoInfoAgentPort;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -19,13 +23,15 @@ import org.springframework.stereotype.Component;
  * 이 adapter는 Spring 오케스트레이터가 그 CLI 실행 방식을 직접 품지 않도록 감싸며,
  * {@link PhotoInfoAgentPort} 계약에 맞춰 처리 사진 수와 bundle artifact 경로만 반환한다.</p>
  *
- * <p>{@code local-photo-info} 프로필에서만 활성화된다. 프로세스 시작 실패, 비정상 종료,
- * bundle 파일 읽기 실패는 모두 {@link IllegalStateException}으로 전파되어 워크플로 실패 기록의
- * 원인이 된다.</p>
+ * <p>{@code local-photo-info} 프로필에서만 활성화된다. 프로세스 시작 실패, 타임아웃, 비정상 종료,
+ * bundle 경로 누락, bundle JSON 계약 위반, bundle 읽기 실패는 모두 {@link IllegalStateException}으로
+ * 전파되어 워크플로 실패 기록의 원인이 된다.</p>
  */
 @Component
 @Profile("local-photo-info")
 public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
+
+    private static final Path BUNDLE_FILE_RELATIVE = Path.of("bundles", "bundle.json");
 
     private final PhotoInfoPipelineProperties properties;
     private final ObjectMapper objectMapper;
@@ -44,7 +50,7 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         PhotoInfoPipelineProperties properties,
         ObjectMapper objectMapper
     ) {
-        this(properties, objectMapper, new ProcessCommandExecutor());
+        this(properties, objectMapper, new ProcessCommandExecutor(properties));
     }
 
     LocalPhotoInfoPipelineAdapter(
@@ -66,15 +72,26 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      *
      * @param projectId 워크플로에 연결된 프로젝트 식별자
      * @return 처리 사진 수와 생성된 bundle JSON 경로
-     * @throws IllegalStateException 프로세스 실행 실패, 비정상 종료, bundle 읽기 실패 시 발생
+     * @throws IllegalStateException 입력 경로가 없거나, 프로세스 실행·타임아웃·비정상 종료,
+     *                                 bundle 누락, bundle 계약 위반, 읽기 실패 시 발생
      */
     @Override
     public PhotoInfoResult extractPhotoInfo(String projectId) {
         Path inputDir = Path.of(properties.inputRoot()).resolve(projectId);
         Path outputDir = Path.of(properties.outputRoot()).resolve(projectId);
-        Path bundlePath = outputDir.resolve("bundles").resolve("bundle.json");
+        Path bundlePath = outputDir.resolve(BUNDLE_FILE_RELATIVE);
+
+        if (!Files.isDirectory(inputDir)) {
+            throw new IllegalStateException(
+                "Photo input directory does not exist or is not a directory: " + inputDir
+            );
+        }
 
         commandExecutor.execute(buildCommand(inputDir, outputDir));
+
+        if (!Files.isRegularFile(bundlePath)) {
+            throw new IllegalStateException("Photo info bundle not found at expected path: " + bundlePath);
+        }
         return readResult(bundlePath);
     }
 
@@ -122,11 +139,32 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
     private PhotoInfoResult readResult(Path bundlePath) {
         try {
             JsonNode bundle = objectMapper.readTree(bundlePath.toFile());
-            int photoCount = bundle.path("photo_count").asInt();
+            JsonNode countNode = bundle.get("photo_count");
+            if (countNode == null || countNode.isNull()) {
+                throw new IllegalStateException("bundle JSON missing required field photo_count: " + bundlePath);
+            }
+            if (!countNode.isNumber() || !countNode.isIntegralNumber()) {
+                throw new IllegalStateException("bundle JSON field photo_count must be an integer: " + bundlePath);
+            }
+            int photoCount = countNode.intValue();
+            if (photoCount < 0) {
+                throw new IllegalStateException("bundle JSON field photo_count must be non-negative: " + bundlePath);
+            }
             return new PhotoInfoResult(photoCount, bundlePath.toString());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read photo info bundle: " + bundlePath, exception);
         }
+    }
+
+    /**
+     * Ollama 단계 제한(초)에 비례한 JVM 기준의 파이프라인 전체 wall-clock 제한을 계산한다.
+     *
+     * <p>Python 쪽 {@code ollama-timeout-seconds}는 LLM 요청마다 쓰는 제한이고, 프로세스는 여러 장 처리와
+     * I/O를 포함하므로 그보다 훨씬 긴 상한이 필요하다. 최소 5분, 최대 1시간으로 캡한다.</p>
+     */
+    private static Duration pipelineProcessTimeout(PhotoInfoPipelineProperties properties) {
+        long seconds = Math.max(300L, Math.min(3_600L, (long) properties.ollamaTimeoutSeconds() * 30L));
+        return Duration.ofSeconds(seconds);
     }
 
     /**
@@ -147,30 +185,83 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      */
     private static final class ProcessCommandExecutor implements CommandExecutor {
 
+        private static final int LOG_TAIL_MAX_CHARS = 8_000;
+
+        private final Duration processTimeout;
+
+        private ProcessCommandExecutor(PhotoInfoPipelineProperties properties) {
+            this.processTimeout = pipelineProcessTimeout(properties);
+        }
+
         /**
          * Python 파이프라인 프로세스를 실행하고 종료 코드를 검증한다.
          *
-         * <p>표준 에러는 표준 출력으로 합쳐 향후 로그 수집을 단순화한다. 현재 구현은 출력 본문을 저장하지 않고
-         * 종료 코드만 확인한다. 인터럽트가 발생하면 스레드 인터럽트 상태를 복구한 뒤 실패로 전파한다.</p>
+         * <p>표준 출력과 표준 에러는 합쳐 임시 파일에 기록해 파이프가 막혀 Python이 멈추는 것을 막는다.
+         * 비정상 종료·타임아웃일 때는 로그 끝부분을 예외 메시지에 붙인다. 인터럽트가 발생하면 스레드
+         * 인터럽트 상태를 복구한 뒤 실패로 전파한다.</p>
          *
          * @param command 실행할 Python 파이프라인 명령 토큰
-         * @throws IllegalStateException 프로세스를 시작할 수 없거나 종료 코드가 0이 아니거나 인터럽트된 경우
+         * @throws IllegalStateException 프로세스를 시작할 수 없거나, 타임아웃이거나, 종료 코드가 0이 아니거나
+         *     인터럽트된 경우
          */
         @Override
         public void execute(List<String> command) {
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            processBuilder.redirectErrorStream(true);
+            Path logFile;
             try {
-                Process process = processBuilder.start();
-                int exitCode = process.waitFor();
-                if (exitCode != 0) {
-                    throw new IllegalStateException("Photo info pipeline failed with exit code " + exitCode);
-                }
+                logFile = Files.createTempFile("photo-info-pipeline", ".log");
             } catch (IOException exception) {
-                throw new IllegalStateException("Failed to start photo info pipeline", exception);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Photo info pipeline was interrupted", exception);
+                throw new IllegalStateException("Failed to create temp file for photo info pipeline log", exception);
+            }
+            try {
+                ProcessBuilder processBuilder = new ProcessBuilder(command);
+                processBuilder.redirectErrorStream(true);
+                processBuilder.redirectOutput(logFile.toFile());
+                try {
+                    Process process = processBuilder.start();
+                    boolean completed = process.waitFor(processTimeout.toSeconds(), TimeUnit.SECONDS);
+                    if (!completed) {
+                        process.destroyForcibly();
+                        String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
+                        throw new IllegalStateException(
+                            "Photo info pipeline timed out after "
+                                + processTimeout.toSeconds()
+                                + "s. Log tail: "
+                                + tail
+                        );
+                    }
+                    int exitCode = process.exitValue();
+                    if (exitCode != 0) {
+                        String tail = readLogTail(logFile, LOG_TAIL_MAX_CHARS);
+                        throw new IllegalStateException(
+                            "Photo info pipeline failed with exit code " + exitCode + ". Log tail: " + tail
+                        );
+                    }
+                } catch (IOException exception) {
+                    throw new IllegalStateException("Failed to start photo info pipeline", exception);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Photo info pipeline was interrupted", exception);
+                }
+            } finally {
+                try {
+                    Files.deleteIfExists(logFile);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+
+        private static String readLogTail(Path logFile, int maxChars) {
+            if (!Files.isRegularFile(logFile)) {
+                return "";
+            }
+            try {
+                String text = Files.readString(logFile, StandardCharsets.UTF_8);
+                if (text.length() <= maxChars) {
+                    return text;
+                }
+                return text.substring(text.length() - maxChars);
+            } catch (IOException exception) {
+                return "(could not read pipeline log: " + exception.getMessage() + ")";
             }
         }
     }
