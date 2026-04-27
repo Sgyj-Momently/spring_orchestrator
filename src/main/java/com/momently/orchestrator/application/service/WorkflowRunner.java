@@ -2,10 +2,12 @@ package com.momently.orchestrator.application.service;
 
 import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
 import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
+import com.momently.orchestrator.application.port.out.OutlineAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoGroupingAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoInfoAgentPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
+import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.domain.Workflow;
@@ -36,6 +38,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private final PhotoInfoAgentPort photoInfoAgentPort;
     private final PhotoGroupingAgentPort photoGroupingAgentPort;
     private final HeroPhotoAgentPort heroPhotoAgentPort;
+    private final OutlineAgentPort outlineAgentPort;
 
     /**
      * 워크플로 실행기에 필요한 의존성을 생성한다.
@@ -45,19 +48,22 @@ public class WorkflowRunner implements RunWorkflowUseCase {
      * @param photoInfoAgentPort 사진 정보 추출 에이전트 포트
      * @param photoGroupingAgentPort 사진 그룹화 에이전트 포트
      * @param heroPhotoAgentPort 대표 사진 선택 에이전트 포트
+     * @param outlineAgentPort 개요 생성 에이전트 포트
      */
     public WorkflowRunner(
         WorkflowRepository workflowRepository,
         WorkflowStateMachine workflowStateMachine,
         PhotoInfoAgentPort photoInfoAgentPort,
         PhotoGroupingAgentPort photoGroupingAgentPort,
-        HeroPhotoAgentPort heroPhotoAgentPort
+        HeroPhotoAgentPort heroPhotoAgentPort,
+        OutlineAgentPort outlineAgentPort
     ) {
         this.workflowRepository = workflowRepository;
         this.workflowStateMachine = workflowStateMachine;
         this.photoInfoAgentPort = photoInfoAgentPort;
         this.photoGroupingAgentPort = photoGroupingAgentPort;
         this.heroPhotoAgentPort = heroPhotoAgentPort;
+        this.outlineAgentPort = outlineAgentPort;
     }
 
     /**
@@ -100,6 +106,10 @@ public class WorkflowRunner implements RunWorkflowUseCase {
      * 둘 다 없으면 처음부터 실행한다.</p>
      */
     private void runFromResumePoint(Workflow workflow) {
+        if (workflow.getOutlineResultPath() != null) {
+            return;
+        }
+
         if (workflow.getGroupingResultPath() != null) {
             PhotoInfoResult photoInfoResult = new PhotoInfoResult(
                 workflow.getPhotoCount(),
@@ -111,7 +121,8 @@ public class WorkflowRunner implements RunWorkflowUseCase {
                 workflow.getGroupCount(),
                 workflow.getGroupingResultPath()
             );
-            runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+            HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+            runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
             return;
         }
 
@@ -122,13 +133,15 @@ public class WorkflowRunner implements RunWorkflowUseCase {
                 workflow.getBlogPath()
             );
             PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
-            runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+            HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+            runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
             return;
         }
 
         PhotoInfoResult photoInfoResult = runPhotoInfoStep(workflow);
         PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
-        runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+        HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
+        runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
     }
 
     private PhotoInfoResult runPhotoInfoStep(Workflow workflow) {
@@ -159,7 +172,11 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         return photoGroupingResult;
     }
 
-    private void runHeroPhotoStep(Workflow workflow, PhotoInfoResult photoInfoResult, PhotoGroupingResult photoGroupingResult) {
+    private HeroPhotoResult runHeroPhotoStep(
+        Workflow workflow,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult
+    ) {
         advance(workflow, WorkflowStatus.HERO_PHOTO_SELECTING);
         HeroPhotoResult heroPhotoResult = heroPhotoAgentPort.selectHeroPhotos(
             workflow.getProjectId(),
@@ -168,6 +185,24 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         );
         workflow.recordHeroPhotoArtifacts(heroPhotoResult.heroPhotoCount(), heroPhotoResult.resultPath());
         advance(workflow, WorkflowStatus.HERO_PHOTO_SELECTED);
+        return heroPhotoResult;
+    }
+
+    private void runOutlineStep(
+        Workflow workflow,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult
+    ) {
+        advance(workflow, WorkflowStatus.OUTLINE_CREATING);
+        OutlineResult outlineResult = outlineAgentPort.createOutline(
+            workflow.getProjectId(),
+            photoInfoResult,
+            photoGroupingResult,
+            heroPhotoResult
+        );
+        workflow.recordOutlineArtifacts(outlineResult.outlineSectionCount(), outlineResult.resultPath());
+        advance(workflow, WorkflowStatus.OUTLINE_CREATED);
     }
 
     /**

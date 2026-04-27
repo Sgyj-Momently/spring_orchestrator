@@ -25,3 +25,6 @@ agents:
   hero-photo:
     base-url: http://127.0.0.1:8200
     endpoint: /api/v1/hero-photos
+  outline:
+    base-url: http://127.0.0.1:8300
+    endpoint: /api/v1/outlines

@@ -5,17 +5,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
+import com.momently.orchestrator.application.port.out.OutlineAgentPort;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
+import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
-import com.momently.orchestrator.config.HeroPhotoAgentProperties;
+import com.momently.orchestrator.config.OutlineAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
@@ -24,25 +23,18 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-/**
- * FastAPI 대표 사진 선택 에이전트를 HTTP로 호출하는 outbound adapter다.
- *
- * <p>이 adapter는 {@link HeroPhotoAgentPort} 구현체로서, application 계층이 FastAPI의 URL,
- * JSON 필드, HTTP client 세부사항에 의존하지 않게 한다. {@code stub-agents} 프로필이 아닐 때
- * 활성화되며, 로컬 개발 stub 대신 실제 대표 사진 선택 서버를 호출한다.</p>
- */
 @Component
 @Profile("!stub-agents")
-public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
+public class OutlineAgentClient implements OutlineAgentPort {
 
     private static final int ERROR_BODY_MAX_CHARS = 4_000;
 
-    private final HeroPhotoAgentProperties properties;
+    private final OutlineAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
-    public HeroPhotoAgentClient(
-        HeroPhotoAgentProperties properties,
+    public OutlineAgentClient(
+        OutlineAgentProperties properties,
         ObjectMapper objectMapper,
         RestClient.Builder restClientBuilder
     ) {
@@ -52,14 +44,21 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
     }
 
     @Override
-    public HeroPhotoResult selectHeroPhotos(
+    public OutlineResult createOutline(
         String projectId,
         PhotoInfoResult photoInfoResult,
-        PhotoGroupingResult photoGroupingResult
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult
     ) {
         Path groupingResultPath = Path.of(photoGroupingResult.resultPath());
-        Path resultPath = heroPhotoResultPath(groupingResultPath);
-        Map<String, Object> payload = buildPayload(projectId, photoInfoResult, groupingResultPath);
+        Path heroResultPath = Path.of(heroPhotoResult.resultPath());
+        Path resultPath = outlineResultPath(groupingResultPath);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("project_id", projectId);
+        payload.put("groups", readJsonArray(groupingResultPath, "groups"));
+        payload.put("hero_photos", readJsonArray(heroResultPath, "hero_photos"));
+        payload.put("photos", readOutlinePhotos(Path.of(photoInfoResult.bundlePath())));
+
         try {
             JsonNode responseBody = restClient.post()
                 .uri(properties.endpoint())
@@ -70,18 +69,18 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
                 .body(JsonNode.class);
 
             if (responseBody == null || responseBody.isNull()) {
-                throw new IllegalStateException("Hero photo agent returned an empty response");
+                throw new IllegalStateException("Outline agent returned an empty response");
             }
-
-            writeHeroPhotoResult(resultPath, responseBody);
-            HeroPhotoAgentResponse response = objectMapper.treeToValue(responseBody, HeroPhotoAgentResponse.class);
-            return response.toResult(resultPath.toString());
+            writeOutlineResult(resultPath, responseBody);
+            OutlineAgentResponse response = objectMapper.treeToValue(responseBody, OutlineAgentResponse.class);
+            int sectionCount = response.sectionCount();
+            return new OutlineResult(sectionCount, resultPath.toString());
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to persist hero photo result: " + resultPath, exception);
+            throw new IllegalStateException("Failed to persist outline result: " + resultPath, exception);
         } catch (RestClientResponseException exception) {
             String responseBody = truncate(exception.getResponseBodyAsString(), ERROR_BODY_MAX_CHARS);
             throw new IllegalStateException(
-                "Hero photo agent call failed. "
+                "Outline agent call failed. "
                     + "endpoint="
                     + properties.baseUrl()
                     + properties.endpoint()
@@ -89,22 +88,18 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
                     + exception.getRawStatusCode()
                     + ", projectId="
                     + projectId
-                    + ", groupingResultPath="
-                    + photoGroupingResult.resultPath()
                     + ", responseBody="
                     + responseBody,
                 exception
             );
         } catch (RestClientException exception) {
             throw new IllegalStateException(
-                "Failed to call hero photo agent. "
+                "Failed to call outline agent. "
                     + "endpoint="
                     + properties.baseUrl()
                     + properties.endpoint()
                     + ", projectId="
                     + projectId
-                    + ", groupingResultPath="
-                    + photoGroupingResult.resultPath()
                     + ", error="
                     + exception.getClass().getSimpleName()
                     + ": "
@@ -114,63 +109,68 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
         }
     }
 
-    private Map<String, Object> buildPayload(String projectId, PhotoInfoResult photoInfoResult, Path groupingResultPath) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("project_id", projectId);
-        payload.put("groups", readGroups(groupingResultPath));
-        payload.put("photos", readPhotos(Path.of(photoInfoResult.bundlePath())));
-        return payload;
-    }
-
-    private Object readGroups(Path groupingResultPath) {
+    private Object readJsonArray(Path jsonPath, String field) {
         try {
-            JsonNode root = objectMapper.readTree(groupingResultPath.toFile());
-            JsonNode groups = root.path("groups");
-            if (!groups.isArray()) {
+            JsonNode root = objectMapper.readTree(jsonPath.toFile());
+            JsonNode node = root.path(field);
+            if (!node.isArray()) {
                 return java.util.List.of();
             }
-            return objectMapper.convertValue(groups, Object.class);
+            return objectMapper.convertValue(node, Object.class);
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to read grouping result: " + groupingResultPath, exception);
+            throw new IllegalStateException("Failed to read json artifact: " + jsonPath, exception);
         }
     }
 
-    private List<Map<String, Object>> readPhotos(Path bundlePath) {
+    private Object readOutlinePhotos(Path bundlePath) {
         try {
             JsonNode photos = objectMapper.readTree(bundlePath.toFile()).path("photos");
-            List<Map<String, Object>> adaptedPhotos = new ArrayList<>();
             if (!photos.isArray()) {
-                return adaptedPhotos;
+                return java.util.List.of();
             }
+            // 그대로 넘기되, 사진 요약만 쓰는 outline_agent가 소비할 필드만 유지하도록 최소화
+            java.util.List<Map<String, Object>> adapted = new java.util.ArrayList<>();
             for (JsonNode photo : photos) {
                 if (photo.path("photo_summary").path("exclude_from_public_outputs").asBoolean(false)
                     || photo.path("exclude_from_public_outputs").asBoolean(false)) {
                     continue;
                 }
-                Map<String, Object> adaptedPhoto = adaptPhoto(photo);
-                if (!adaptedPhoto.isEmpty()) {
-                    adaptedPhotos.add(adaptedPhoto);
+                String fileName = textOrNull(photo.path("file_name"));
+                if (fileName == null) {
+                    continue;
                 }
+                JsonNode summary = photo.path("photo_summary");
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("photo_id", "file:" + fileName);
+                item.put("file_name", fileName);
+                item.put("summary", textOrNull(summary.path("summary")));
+                item.put("ocr_text", textListOrEmpty(summary.path("ocr_text")));
+                item.put("confidence", numberOrNull(summary.path("confidence")));
+                adapted.add(item);
             }
-            return adaptedPhotos;
+            return adapted;
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read photo info bundle: " + bundlePath, exception);
         }
     }
 
-    private Map<String, Object> adaptPhoto(JsonNode photo) {
-        JsonNode summary = photo.path("photo_summary");
-        Map<String, Object> adapted = new LinkedHashMap<>();
-        String fileName = textOrNull(photo.path("file_name"));
-        if (fileName == null) {
-            return adapted;
+    private Path outlineResultPath(Path groupingResultPath) {
+        Path groupingDirectory = groupingResultPath.getParent();
+        Path outputDirectory = groupingDirectory == null ? Path.of(".") : groupingDirectory.getParent();
+        if (outputDirectory == null) {
+            outputDirectory = Path.of(".");
         }
-        adapted.put("photo_id", "file:" + fileName);
-        adapted.put("file_name", fileName);
-        adapted.put("summary", textOrNull(summary.path("summary")));
-        adapted.put("ocr_text", textListOrEmpty(summary.path("ocr_text")));
-        adapted.put("confidence", numberOrNull(summary.path("confidence")));
-        return adapted;
+        return outputDirectory.resolve("outline").resolve("outline.json");
+    }
+
+    private void writeOutlineResult(Path resultPath, JsonNode responseBody) throws IOException {
+        Files.createDirectories(resultPath.getParent());
+        JsonNode persisted = responseBody;
+        if (responseBody instanceof ObjectNode objectNode) {
+            persisted = objectNode.deepCopy();
+            ((ObjectNode) persisted).put("artifact_type", "outline_result");
+        }
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(resultPath.toFile(), persisted);
     }
 
     private String textOrNull(JsonNode node) {
@@ -191,11 +191,11 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
         return node.doubleValue();
     }
 
-    private List<String> textListOrEmpty(JsonNode node) {
+    private java.util.List<String> textListOrEmpty(JsonNode node) {
         if (!node.isArray()) {
-            return List.of();
+            return java.util.List.of();
         }
-        List<String> values = new ArrayList<>();
+        java.util.List<String> values = new java.util.ArrayList<>();
         for (JsonNode item : node) {
             String value = item.asText();
             if (!value.isBlank()) {
@@ -203,25 +203,6 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
             }
         }
         return values;
-    }
-
-    private Path heroPhotoResultPath(Path groupingResultPath) {
-        Path groupingDirectory = groupingResultPath.getParent();
-        Path outputDirectory = groupingDirectory == null ? Path.of(".") : groupingDirectory.getParent();
-        if (outputDirectory == null) {
-            outputDirectory = Path.of(".");
-        }
-        return outputDirectory.resolve("hero-photo").resolve("hero-result.json");
-    }
-
-    private void writeHeroPhotoResult(Path resultPath, JsonNode responseBody) throws IOException {
-        Files.createDirectories(resultPath.getParent());
-        JsonNode persisted = responseBody;
-        if (responseBody instanceof ObjectNode objectNode) {
-            persisted = objectNode.deepCopy();
-            ((ObjectNode) persisted).put("artifact_type", "hero_photo_result");
-        }
-        objectMapper.writerWithDefaultPrettyPrinter().writeValue(resultPath.toFile(), persisted);
     }
 
     private static String truncate(String value, int maxChars) {
@@ -235,11 +216,17 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record HeroPhotoAgentResponse(
-        @JsonProperty("hero_photo_count") int heroPhotoCount
+    record OutlineAgentResponse(
+        @JsonProperty("outline_status") String outlineStatus,
+        @JsonProperty("outline") JsonNode outline
     ) {
-        HeroPhotoResult toResult(String resultPath) {
-            return new HeroPhotoResult(heroPhotoCount, resultPath);
+        int sectionCount() {
+            if (outline == null || outline.isNull()) {
+                return 0;
+            }
+            JsonNode sections = outline.path("sections");
+            return sections.isArray() ? sections.size() : 0;
         }
     }
 }
+

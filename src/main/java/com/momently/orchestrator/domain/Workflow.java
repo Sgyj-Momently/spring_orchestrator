@@ -18,10 +18,12 @@ public class Workflow {
     private Integer photoCount;
     private Integer groupCount;
     private Integer heroPhotoCount;
+    private Integer outlineSectionCount;
     private String photoInfoBundlePath;
     private String blogPath;
     private String groupingResultPath;
     private String heroPhotoResultPath;
+    private String outlineResultPath;
 
     /**
      * Creates a new workflow aggregate.
@@ -99,6 +101,17 @@ public class Workflow {
         this.heroPhotoResultPath = heroPhotoResultPath;
     }
 
+    /**
+     * Records artifacts produced by the outline step.
+     *
+     * @param outlineSectionCount number of outline sections
+     * @param outlineResultPath path to the outline JSON artifact
+     */
+    public void recordOutlineArtifacts(int outlineSectionCount, String outlineResultPath) {
+        this.outlineSectionCount = outlineSectionCount;
+        this.outlineResultPath = outlineResultPath;
+    }
+
     public UUID getWorkflowId() {
         return workflowId;
     }
@@ -139,6 +152,10 @@ public class Workflow {
         return heroPhotoCount;
     }
 
+    public Integer getOutlineSectionCount() {
+        return outlineSectionCount;
+    }
+
     public String getPhotoInfoBundlePath() {
         return photoInfoBundlePath;
     }
@@ -153,5 +170,9 @@ public class Workflow {
 
     public String getHeroPhotoResultPath() {
         return heroPhotoResultPath;
+    }
+
+    public String getOutlineResultPath() {
+        return outlineResultPath;
     }
 }
