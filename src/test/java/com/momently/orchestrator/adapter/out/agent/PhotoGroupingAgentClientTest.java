@@ -235,6 +235,112 @@ class PhotoGroupingAgentClientTest {
             .hasMessageContaining("Failed to read photo info bundle");
     }
 
+    @Test
+    @DisplayName("bundle photos가 배열이 아니면 빈 사진 목록으로 그룹화 요청을 보낸다")
+    void treatsNonArrayPhotosAsEmptyList() throws IOException {
+        Path bundlePath = writeBundle("""
+            {
+              "photo_count": 0,
+              "photos": {}
+            }
+            """);
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PhotoGroupingAgentClient client = new PhotoGroupingAgentClient(
+            new PhotoGroupingAgentProperties("http://photo-grouping.test", "/api/v1/photo-groups"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://photo-grouping.test/api/v1/photo-groups"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().json("""
+                {
+                  "project_id": "project-001",
+                  "grouping_strategy": "LOCATION_BASED",
+                  "photos": []
+                }
+                """))
+            .andRespond(withSuccess("""
+                {
+                  "grouping_strategy": "LOCATION_BASED",
+                  "group_count": 0,
+                  "groups": []
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        PhotoGroupingResult result = client.groupPhotos(
+            "project-001",
+            "LOCATION_BASED",
+            90,
+            new PhotoInfoResult(0, bundlePath.toString())
+        );
+
+        assertThat(result.groupCount()).isZero();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("파일명이 없는 사진은 deterministic fallback ID로 변환한다")
+    void usesFallbackPhotoNameWhenFileNameMissing() throws IOException {
+        Path bundlePath = writeBundle("""
+            {
+              "photo_count": 1,
+              "photos": [
+                {
+                  "captured_at": null,
+                  "has_gps": null,
+                  "gps": null,
+                  "photo_summary": {
+                    "subjects": "not-array"
+                  }
+                }
+              ]
+            }
+            """);
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PhotoGroupingAgentClient client = new PhotoGroupingAgentClient(
+            new PhotoGroupingAgentProperties("http://photo-grouping.test", "/api/v1/photo-groups"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://photo-grouping.test/api/v1/photo-groups"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().json("""
+                {
+                  "project_id": "project-001",
+                  "grouping_strategy": "LOCATION_BASED",
+                  "photos": [
+                    {
+                      "photo_id": "file:photo-001",
+                      "file_name": "photo-001",
+                      "captured_at": null,
+                      "has_gps": null,
+                      "gps": null,
+                      "subjects": []
+                    }
+                  ]
+                }
+                """))
+            .andRespond(withSuccess("""
+                {
+                  "grouping_strategy": "LOCATION_BASED",
+                  "group_count": 1,
+                  "groups": []
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        PhotoGroupingResult result = client.groupPhotos(
+            "project-001",
+            "LOCATION_BASED",
+            90,
+            new PhotoInfoResult(1, bundlePath.toString())
+        );
+
+        assertThat(result.groupCount()).isEqualTo(1);
+        server.verify();
+    }
+
     private Path writeBundle(String content) throws IOException {
         Path bundlePath = tempDir.resolve("output").resolve("bundles").resolve("bundle.json");
         Files.createDirectories(bundlePath.getParent());

@@ -102,10 +102,12 @@ public class WorkflowController {
             workflow.getPhotoCount(),
             workflow.getGroupCount(),
             workflow.getHeroPhotoCount(),
+            workflow.getOutlineSectionCount(),
             workflow.getPhotoInfoBundlePath(),
             workflow.getBlogPath(),
             workflow.getGroupingResultPath(),
             workflow.getHeroPhotoResultPath(),
+            workflow.getOutlineResultPath(),
             workflow.getLastFailedStep(),
             workflow.getLastErrorMessage()
         );

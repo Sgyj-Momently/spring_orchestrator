@@ -321,6 +321,49 @@ class LocalPhotoInfoPipelineAdapterTest {
             .hasMessageContaining("pipeline failed loudly");
     }
 
+    @Test
+    @DisplayName("실제 프로세스 성공 시 bundle artifact를 읽어 결과를 반환한다")
+    void runsRealProcessExecutorOnSuccess() throws IOException {
+        Path inputRoot = tempDir.resolve("input");
+        Path outputRoot = tempDir.resolve("output");
+        Files.createDirectories(inputRoot.resolve("project-001"));
+        Path scriptPath = tempDir.resolve("success-pipeline.sh");
+        Files.writeString(scriptPath, """
+            output_dir=""
+            while [ "$#" -gt 0 ]; do
+              if [ "$1" = "--output" ]; then
+                shift
+                output_dir="$1"
+              fi
+              shift
+            done
+            mkdir -p "$output_dir/bundles"
+            printf '{"photo_count":1,"photos":[{"file_name":"IMG_0001.jpg"}]}' > "$output_dir/bundles/bundle.json"
+            """);
+        LocalPhotoInfoPipelineAdapter adapter = new LocalPhotoInfoPipelineAdapter(
+            new PhotoInfoPipelineProperties(
+                "/bin/sh",
+                scriptPath.toString(),
+                inputRoot.toString(),
+                outputRoot.toString(),
+                "http://ollama.test",
+                "qwen2.5vl:7b",
+                "gemma4",
+                60,
+                true,
+                false
+            ),
+            new ObjectMapper()
+        );
+
+        PhotoInfoResult result = adapter.extractPhotoInfo("project-001");
+
+        assertThat(result.photoCount()).isEqualTo(1);
+        assertThat(result.bundlePath()).isEqualTo(
+            outputRoot.resolve("project-001").resolve("bundles").resolve("bundle.json").toString()
+        );
+    }
+
     private PhotoInfoPipelineProperties properties(Path inputRoot, Path outputRoot, boolean skipBlog) {
         return new PhotoInfoPipelineProperties(
             "python",

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mockStatic;
 import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowResponse;
 import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
+import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.domain.WorkflowStatus;
@@ -34,15 +35,18 @@ class ContractRecordTest {
             10,
             3,
             2,
+            4,
             "bundle.json",
             "blog.md",
             "grouping-result.json",
             "hero-result.json",
+            "outline.json",
             null,
             null
         );
         PhotoInfoResult photoInfoResult = new PhotoInfoResult(10, "bundle.json");
         PhotoGroupingResult photoGroupingResult = new PhotoGroupingResult("TIME_BASED", 3);
+        HeroPhotoResult heroPhotoResult = new HeroPhotoResult(2);
 
         assertThat(request.projectId()).isEqualTo("project-001");
         assertThat(command.groupingStrategy()).isEqualTo("LOCATION_BASED");
@@ -52,6 +56,8 @@ class ContractRecordTest {
         assertThat(response.groupingResultPath()).isEqualTo("grouping-result.json");
         assertThat(photoInfoResult.photoCount()).isEqualTo(10);
         assertThat(photoGroupingResult.groupCount()).isEqualTo(3);
+        assertThat(heroPhotoResult.heroPhotoCount()).isEqualTo(2);
+        assertThat(heroPhotoResult.resultPath()).isNull();
     }
 
     @Test
