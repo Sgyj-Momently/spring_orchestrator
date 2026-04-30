@@ -5,13 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.momently.orchestrator.application.port.out.DraftAgentPort;
-import com.momently.orchestrator.application.port.out.result.DraftResult;
-import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
-import com.momently.orchestrator.application.port.out.result.OutlineResult;
-import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
+import com.momently.orchestrator.application.port.out.PrivacySafetyAgentPort;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
-import com.momently.orchestrator.config.DraftAgentProperties;
+import com.momently.orchestrator.application.port.out.result.PrivacySafetyResult;
+import com.momently.orchestrator.config.PrivacySafetyAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,40 +23,42 @@ import org.springframework.web.client.RestClientResponseException;
 
 @Component
 @Profile("!stub-agents")
-public class DraftAgentClient implements DraftAgentPort {
+public class PrivacySafetyAgentClient implements PrivacySafetyAgentPort {
 
-    private final DraftAgentProperties properties;
+    private final PrivacySafetyAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
-    public DraftAgentClient(DraftAgentProperties properties, ObjectMapper objectMapper, RestClient.Builder builder) {
+    public PrivacySafetyAgentClient(
+        PrivacySafetyAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder builder
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClient = builder.baseUrl(properties.baseUrl()).build();
     }
 
     @Override
-    public DraftResult createDraft(
-        String projectId,
-        PhotoInfoResult photoInfoResult,
-        PhotoGroupingResult photoGroupingResult,
-        HeroPhotoResult heroPhotoResult,
-        OutlineResult outlineResult
-    ) {
-        Path outlinePath = Path.of(outlineResult.resultPath());
-        Path resultPath = siblingStagePath(outlinePath, "draft", "draft.json");
+    public PrivacySafetyResult reviewPrivacy(String projectId, PhotoInfoResult photoInfoResult) {
+        Path originalBundlePath = Path.of(photoInfoResult.bundlePath());
+        Path resultPath = siblingStagePath(originalBundlePath, "privacy", "privacy-result.json");
+        Path sanitizedBundlePath = siblingStagePath(originalBundlePath, "privacy", "bundle.json");
+        JsonNode originalBundle = readJson(originalBundlePath);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("project_id", projectId);
-        JsonNode outline = readJson(outlinePath).path("outline");
-        payload.put("outline", outline.isObject() ? outline : Map.of("title", projectId, "sections", java.util.List.of()));
-        payload.put("groups", readField(Path.of(photoGroupingResult.resultPath()), "groups"));
-        payload.put("hero_photos", readField(Path.of(heroPhotoResult.resultPath()), "hero_photos"));
-        payload.put("photos", readField(Path.of(photoInfoResult.bundlePath()), "photos"));
+        payload.put("photos", arrayOrEmpty(originalBundle.path("photos")));
 
         JsonNode body = post(payload);
-        writeResult(resultPath, body, "draft_result");
-        DraftAgentResponse response = convert(body, DraftAgentResponse.class);
-        return new DraftResult(response.sectionCount(), resultPath.toString());
+        writeResult(resultPath, body);
+        writeSanitizedBundle(sanitizedBundlePath, originalBundle, body);
+        PrivacySafetyAgentResponse response = convert(body, PrivacySafetyAgentResponse.class);
+        return new PrivacySafetyResult(
+            response.publicPhotoCount(),
+            response.excludedPhotoCount(),
+            resultPath.toString(),
+            sanitizedBundlePath.toString()
+        );
     }
 
     private JsonNode post(Map<String, Object> payload) {
@@ -72,14 +71,14 @@ public class DraftAgentClient implements DraftAgentPort {
                 .retrieve()
                 .body(JsonNode.class);
             if (body == null || body.isNull()) {
-                throw new IllegalStateException("Draft agent returned an empty response");
+                throw new IllegalStateException("Privacy safety agent returned an empty response");
             }
             return body;
         } catch (RestClientResponseException exception) {
-            throw new IllegalStateException("Draft agent call failed. status=%s, responseBody=%s"
+            throw new IllegalStateException("Privacy safety agent call failed. status=%s, responseBody=%s"
                 .formatted(exception.getRawStatusCode(), exception.getResponseBodyAsString()), exception);
         } catch (RestClientException exception) {
-            throw new IllegalStateException("Failed to call draft agent: " + exception.getMessage(), exception);
+            throw new IllegalStateException("Failed to call privacy safety agent: " + exception.getMessage(), exception);
         }
     }
 
@@ -91,22 +90,35 @@ public class DraftAgentClient implements DraftAgentPort {
         }
     }
 
-    private Object readField(Path path, String field) {
-        JsonNode node = readJson(path).path(field);
+    private Object arrayOrEmpty(JsonNode node) {
         return node.isArray() ? objectMapper.convertValue(node, Object.class) : java.util.List.of();
     }
 
-    private void writeResult(Path path, JsonNode body, String artifactType) {
+    private void writeResult(Path path, JsonNode body) {
         try {
             Files.createDirectories(path.getParent());
             JsonNode persisted = body;
             if (body instanceof ObjectNode objectNode) {
                 persisted = objectNode.deepCopy();
-                ((ObjectNode) persisted).put("artifact_type", artifactType);
+                ((ObjectNode) persisted).put("artifact_type", "privacy_safety_result");
             }
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), persisted);
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to persist draft result: " + path, exception);
+            throw new IllegalStateException("Failed to persist privacy safety result: " + path, exception);
+        }
+    }
+
+    private void writeSanitizedBundle(Path path, JsonNode originalBundle, JsonNode privacyResult) {
+        try {
+            Files.createDirectories(path.getParent());
+            ObjectNode sanitized = originalBundle.deepCopy();
+            sanitized.set("photos", privacyResult.path("public_photos"));
+            sanitized.set("excluded_photos", privacyResult.path("excluded_photos"));
+            sanitized.put("photo_count", privacyResult.path("public_photo_count").asInt(0));
+            sanitized.put("privacy_result_path", siblingStagePath(Path.of(path.toString()), "privacy", "privacy-result.json").toString());
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), sanitized);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to persist sanitized privacy bundle: " + path, exception);
         }
     }
 
@@ -114,7 +126,7 @@ public class DraftAgentClient implements DraftAgentPort {
         try {
             return objectMapper.treeToValue(body, type);
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to parse draft response", exception);
+            throw new IllegalStateException("Failed to parse privacy safety response", exception);
         }
     }
 
@@ -125,8 +137,10 @@ public class DraftAgentClient implements DraftAgentPort {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record DraftAgentResponse(
-        @JsonProperty("section_count") int sectionCount
+    record PrivacySafetyAgentResponse(
+        @JsonProperty("public_photo_count") int publicPhotoCount,
+        @JsonProperty("excluded_photo_count") int excludedPhotoCount
     ) {
     }
 }
+
