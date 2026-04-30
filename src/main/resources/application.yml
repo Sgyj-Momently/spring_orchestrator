@@ -28,3 +28,12 @@ agents:
   outline:
     base-url: http://127.0.0.1:8300
     endpoint: /api/v1/outlines
+  draft:
+    base-url: http://127.0.0.1:8400
+    endpoint: /api/v1/drafts
+  style:
+    base-url: http://127.0.0.1:8500
+    endpoint: /api/v1/styles
+  review:
+    base-url: http://127.0.0.1:8600
+    endpoint: /api/v1/reviews

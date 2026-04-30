@@ -1,15 +1,21 @@
 package com.momently.orchestrator.application.service;
 
 import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
+import com.momently.orchestrator.application.port.out.DraftAgentPort;
 import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
 import com.momently.orchestrator.application.port.out.OutlineAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoGroupingAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoInfoAgentPort;
+import com.momently.orchestrator.application.port.out.ReviewAgentPort;
+import com.momently.orchestrator.application.port.out.StyleAgentPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
+import com.momently.orchestrator.application.port.out.result.DraftResult;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.application.port.out.result.ReviewResult;
+import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.EnumSet;
@@ -30,7 +36,11 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private static final Set<WorkflowStatus> IN_PROGRESS_STATUSES = EnumSet.of(
         WorkflowStatus.PHOTO_INFO_EXTRACTING,
         WorkflowStatus.PHOTO_GROUPING,
-        WorkflowStatus.HERO_PHOTO_SELECTING
+        WorkflowStatus.HERO_PHOTO_SELECTING,
+        WorkflowStatus.OUTLINE_CREATING,
+        WorkflowStatus.DRAFT_CREATING,
+        WorkflowStatus.STYLE_APPLYING,
+        WorkflowStatus.REVIEWING
     );
 
     private final WorkflowRepository workflowRepository;
@@ -39,6 +49,9 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private final PhotoGroupingAgentPort photoGroupingAgentPort;
     private final HeroPhotoAgentPort heroPhotoAgentPort;
     private final OutlineAgentPort outlineAgentPort;
+    private final DraftAgentPort draftAgentPort;
+    private final StyleAgentPort styleAgentPort;
+    private final ReviewAgentPort reviewAgentPort;
 
     /**
      * 워크플로 실행기에 필요한 의존성을 생성한다.
@@ -56,7 +69,10 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         PhotoInfoAgentPort photoInfoAgentPort,
         PhotoGroupingAgentPort photoGroupingAgentPort,
         HeroPhotoAgentPort heroPhotoAgentPort,
-        OutlineAgentPort outlineAgentPort
+        OutlineAgentPort outlineAgentPort,
+        DraftAgentPort draftAgentPort,
+        StyleAgentPort styleAgentPort,
+        ReviewAgentPort reviewAgentPort
     ) {
         this.workflowRepository = workflowRepository;
         this.workflowStateMachine = workflowStateMachine;
@@ -64,6 +80,9 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         this.photoGroupingAgentPort = photoGroupingAgentPort;
         this.heroPhotoAgentPort = heroPhotoAgentPort;
         this.outlineAgentPort = outlineAgentPort;
+        this.draftAgentPort = draftAgentPort;
+        this.styleAgentPort = styleAgentPort;
+        this.reviewAgentPort = reviewAgentPort;
     }
 
     /**
@@ -106,42 +125,66 @@ public class WorkflowRunner implements RunWorkflowUseCase {
      * 둘 다 없으면 처음부터 실행한다.</p>
      */
     private void runFromResumePoint(Workflow workflow) {
+        if (workflow.getReviewResultPath() != null || workflow.getStatus() == WorkflowStatus.COMPLETED) {
+            return;
+        }
+
+        if (workflow.getStyleResultPath() != null) {
+            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
+            StyleResult styleResult = new StyleResult(
+                workflow.getStyledWordCount() == null ? 0 : workflow.getStyledWordCount(),
+                workflow.getStyleResultPath()
+            );
+            runReviewStep(workflow, photoInfoResult, styleResult);
+            return;
+        }
+
+        if (workflow.getDraftResultPath() != null) {
+            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
+            DraftResult draftResult = new DraftResult(
+                workflow.getDraftSectionCount() == null ? 0 : workflow.getDraftSectionCount(),
+                workflow.getDraftResultPath()
+            );
+            StyleResult styleResult = runStyleStep(workflow, draftResult);
+            runReviewStep(workflow, photoInfoResult, styleResult);
+            return;
+        }
+
         if (workflow.getOutlineResultPath() != null) {
+            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
+            OutlineResult outlineResult = new OutlineResult(
+                workflow.getOutlineSectionCount() == null ? 0 : workflow.getOutlineSectionCount(),
+                workflow.getOutlineResultPath()
+            );
+            PhotoGroupingResult photoGroupingResult = currentGroupingResult(workflow);
+            HeroPhotoResult heroPhotoResult = currentHeroPhotoResult(workflow);
+            runTailSteps(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult);
             return;
         }
 
         if (workflow.getGroupingResultPath() != null) {
-            PhotoInfoResult photoInfoResult = new PhotoInfoResult(
-                workflow.getPhotoCount(),
-                workflow.getPhotoInfoBundlePath(),
-                workflow.getBlogPath()
-            );
-            PhotoGroupingResult photoGroupingResult = new PhotoGroupingResult(
-                workflow.getGroupingStrategy(),
-                workflow.getGroupCount(),
-                workflow.getGroupingResultPath()
-            );
+            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
+            PhotoGroupingResult photoGroupingResult = currentGroupingResult(workflow);
             HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
-            runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+            OutlineResult outlineResult = runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+            runTailSteps(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult);
             return;
         }
 
         if (workflow.getPhotoInfoBundlePath() != null) {
-            PhotoInfoResult photoInfoResult = new PhotoInfoResult(
-                workflow.getPhotoCount(),
-                workflow.getPhotoInfoBundlePath(),
-                workflow.getBlogPath()
-            );
+            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
             PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
             HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
-            runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+            OutlineResult outlineResult = runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+            runTailSteps(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult);
             return;
         }
 
         PhotoInfoResult photoInfoResult = runPhotoInfoStep(workflow);
         PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
         HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
-        runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+        OutlineResult outlineResult = runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
+        runTailSteps(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult);
     }
 
     private PhotoInfoResult runPhotoInfoStep(Workflow workflow) {
@@ -188,7 +231,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         return heroPhotoResult;
     }
 
-    private void runOutlineStep(
+    private OutlineResult runOutlineStep(
         Workflow workflow,
         PhotoInfoResult photoInfoResult,
         PhotoGroupingResult photoGroupingResult,
@@ -203,6 +246,84 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         );
         workflow.recordOutlineArtifacts(outlineResult.outlineSectionCount(), outlineResult.resultPath());
         advance(workflow, WorkflowStatus.OUTLINE_CREATED);
+        return outlineResult;
+    }
+
+    private void runTailSteps(
+        Workflow workflow,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult,
+        OutlineResult outlineResult
+    ) {
+        DraftResult draftResult = runDraftStep(
+            workflow,
+            photoInfoResult,
+            photoGroupingResult,
+            heroPhotoResult,
+            outlineResult
+        );
+        StyleResult styleResult = runStyleStep(workflow, draftResult);
+        runReviewStep(workflow, photoInfoResult, styleResult);
+    }
+
+    private DraftResult runDraftStep(
+        Workflow workflow,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult,
+        OutlineResult outlineResult
+    ) {
+        advance(workflow, WorkflowStatus.DRAFT_CREATING);
+        DraftResult draftResult = draftAgentPort.createDraft(
+            workflow.getProjectId(),
+            photoInfoResult,
+            photoGroupingResult,
+            heroPhotoResult,
+            outlineResult
+        );
+        workflow.recordDraftArtifacts(draftResult.draftSectionCount(), draftResult.resultPath());
+        advance(workflow, WorkflowStatus.DRAFT_CREATED);
+        return draftResult;
+    }
+
+    private StyleResult runStyleStep(Workflow workflow, DraftResult draftResult) {
+        advance(workflow, WorkflowStatus.STYLE_APPLYING);
+        StyleResult styleResult = styleAgentPort.applyStyle(workflow.getProjectId(), draftResult);
+        workflow.recordStyleArtifacts(styleResult.wordCount(), styleResult.resultPath());
+        advance(workflow, WorkflowStatus.STYLE_APPLIED);
+        return styleResult;
+    }
+
+    private void runReviewStep(Workflow workflow, PhotoInfoResult photoInfoResult, StyleResult styleResult) {
+        advance(workflow, WorkflowStatus.REVIEWING);
+        ReviewResult reviewResult = reviewAgentPort.reviewDocument(workflow.getProjectId(), photoInfoResult, styleResult);
+        workflow.recordReviewArtifacts(reviewResult.issueCount(), reviewResult.resultPath());
+        advance(workflow, WorkflowStatus.REVIEW_COMPLETED);
+        advance(workflow, WorkflowStatus.COMPLETED);
+    }
+
+    private PhotoInfoResult currentPhotoInfoResult(Workflow workflow) {
+        return new PhotoInfoResult(
+            workflow.getPhotoCount() == null ? 0 : workflow.getPhotoCount(),
+            workflow.getPhotoInfoBundlePath(),
+            workflow.getBlogPath()
+        );
+    }
+
+    private PhotoGroupingResult currentGroupingResult(Workflow workflow) {
+        return new PhotoGroupingResult(
+            workflow.getGroupingStrategy(),
+            workflow.getGroupCount() == null ? 0 : workflow.getGroupCount(),
+            workflow.getGroupingResultPath()
+        );
+    }
+
+    private HeroPhotoResult currentHeroPhotoResult(Workflow workflow) {
+        return new HeroPhotoResult(
+            workflow.getHeroPhotoCount() == null ? 0 : workflow.getHeroPhotoCount(),
+            workflow.getHeroPhotoResultPath()
+        );
     }
 
     /**

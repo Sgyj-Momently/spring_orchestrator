@@ -19,11 +19,17 @@ public class Workflow {
     private Integer groupCount;
     private Integer heroPhotoCount;
     private Integer outlineSectionCount;
+    private Integer draftSectionCount;
+    private Integer styledWordCount;
+    private Integer reviewIssueCount;
     private String photoInfoBundlePath;
     private String blogPath;
     private String groupingResultPath;
     private String heroPhotoResultPath;
     private String outlineResultPath;
+    private String draftResultPath;
+    private String styleResultPath;
+    private String reviewResultPath;
 
     /**
      * Creates a new workflow aggregate.
@@ -112,6 +118,30 @@ public class Workflow {
         this.outlineResultPath = outlineResultPath;
     }
 
+    /**
+     * Records artifacts produced by the draft step.
+     */
+    public void recordDraftArtifacts(int draftSectionCount, String draftResultPath) {
+        this.draftSectionCount = draftSectionCount;
+        this.draftResultPath = draftResultPath;
+    }
+
+    /**
+     * Records artifacts produced by the style step.
+     */
+    public void recordStyleArtifacts(int styledWordCount, String styleResultPath) {
+        this.styledWordCount = styledWordCount;
+        this.styleResultPath = styleResultPath;
+    }
+
+    /**
+     * Records artifacts produced by the review step.
+     */
+    public void recordReviewArtifacts(int reviewIssueCount, String reviewResultPath) {
+        this.reviewIssueCount = reviewIssueCount;
+        this.reviewResultPath = reviewResultPath;
+    }
+
     public UUID getWorkflowId() {
         return workflowId;
     }
@@ -156,6 +186,18 @@ public class Workflow {
         return outlineSectionCount;
     }
 
+    public Integer getDraftSectionCount() {
+        return draftSectionCount;
+    }
+
+    public Integer getStyledWordCount() {
+        return styledWordCount;
+    }
+
+    public Integer getReviewIssueCount() {
+        return reviewIssueCount;
+    }
+
     public String getPhotoInfoBundlePath() {
         return photoInfoBundlePath;
     }
@@ -174,5 +216,17 @@ public class Workflow {
 
     public String getOutlineResultPath() {
         return outlineResultPath;
+    }
+
+    public String getDraftResultPath() {
+        return draftResultPath;
+    }
+
+    public String getStyleResultPath() {
+        return styleResultPath;
+    }
+
+    public String getReviewResultPath() {
+        return reviewResultPath;
     }
 }

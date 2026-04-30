@@ -83,14 +83,26 @@ class WorkflowTest {
         );
         workflow.recordGroupingArtifacts(3, "output/project-001/grouping/grouping-result.json");
         workflow.recordHeroPhotoArtifacts(3, "output/project-001/hero-photo/hero-result.json");
+        workflow.recordOutlineArtifacts(3, "output/project-001/outline/outline.json");
+        workflow.recordDraftArtifacts(3, "output/project-001/draft/draft.json");
+        workflow.recordStyleArtifacts(120, "output/project-001/style/styled.json");
+        workflow.recordReviewArtifacts(0, "output/project-001/review/final.json");
 
         assertThat(workflow.getPhotoCount()).isEqualTo(11);
         assertThat(workflow.getGroupCount()).isEqualTo(3);
         assertThat(workflow.getHeroPhotoCount()).isEqualTo(3);
+        assertThat(workflow.getOutlineSectionCount()).isEqualTo(3);
+        assertThat(workflow.getDraftSectionCount()).isEqualTo(3);
+        assertThat(workflow.getStyledWordCount()).isEqualTo(120);
+        assertThat(workflow.getReviewIssueCount()).isZero();
         assertThat(workflow.getPhotoInfoBundlePath()).isEqualTo("output/project-001/bundles/bundle.json");
         assertThat(workflow.getBlogPath()).isEqualTo("output/project-001/blog.md");
         assertThat(workflow.getGroupingResultPath()).isEqualTo("output/project-001/grouping/grouping-result.json");
         assertThat(workflow.getHeroPhotoResultPath()).isEqualTo("output/project-001/hero-photo/hero-result.json");
+        assertThat(workflow.getOutlineResultPath()).isEqualTo("output/project-001/outline/outline.json");
+        assertThat(workflow.getDraftResultPath()).isEqualTo("output/project-001/draft/draft.json");
+        assertThat(workflow.getStyleResultPath()).isEqualTo("output/project-001/style/styled.json");
+        assertThat(workflow.getReviewResultPath()).isEqualTo("output/project-001/review/final.json");
     }
 
     @Test
