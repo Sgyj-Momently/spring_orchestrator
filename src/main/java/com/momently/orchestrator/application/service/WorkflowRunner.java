@@ -6,6 +6,7 @@ import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
 import com.momently.orchestrator.application.port.out.OutlineAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoGroupingAgentPort;
 import com.momently.orchestrator.application.port.out.PhotoInfoAgentPort;
+import com.momently.orchestrator.application.port.out.PrivacySafetyAgentPort;
 import com.momently.orchestrator.application.port.out.ReviewAgentPort;
 import com.momently.orchestrator.application.port.out.StyleAgentPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
@@ -14,6 +15,7 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.application.port.out.result.PrivacySafetyResult;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.Workflow;
@@ -35,6 +37,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
 
     private static final Set<WorkflowStatus> IN_PROGRESS_STATUSES = EnumSet.of(
         WorkflowStatus.PHOTO_INFO_EXTRACTING,
+        WorkflowStatus.PRIVACY_REVIEWING,
         WorkflowStatus.PHOTO_GROUPING,
         WorkflowStatus.HERO_PHOTO_SELECTING,
         WorkflowStatus.OUTLINE_CREATING,
@@ -46,6 +49,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private final WorkflowRepository workflowRepository;
     private final WorkflowStateMachine workflowStateMachine;
     private final PhotoInfoAgentPort photoInfoAgentPort;
+    private final PrivacySafetyAgentPort privacySafetyAgentPort;
     private final PhotoGroupingAgentPort photoGroupingAgentPort;
     private final HeroPhotoAgentPort heroPhotoAgentPort;
     private final OutlineAgentPort outlineAgentPort;
@@ -67,6 +71,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         WorkflowRepository workflowRepository,
         WorkflowStateMachine workflowStateMachine,
         PhotoInfoAgentPort photoInfoAgentPort,
+        PrivacySafetyAgentPort privacySafetyAgentPort,
         PhotoGroupingAgentPort photoGroupingAgentPort,
         HeroPhotoAgentPort heroPhotoAgentPort,
         OutlineAgentPort outlineAgentPort,
@@ -77,6 +82,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         this.workflowRepository = workflowRepository;
         this.workflowStateMachine = workflowStateMachine;
         this.photoInfoAgentPort = photoInfoAgentPort;
+        this.privacySafetyAgentPort = privacySafetyAgentPort;
         this.photoGroupingAgentPort = photoGroupingAgentPort;
         this.heroPhotoAgentPort = heroPhotoAgentPort;
         this.outlineAgentPort = outlineAgentPort;
@@ -172,7 +178,13 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         }
 
         if (workflow.getPhotoInfoBundlePath() != null) {
-            PhotoInfoResult photoInfoResult = currentPhotoInfoResult(workflow);
+            PhotoInfoResult photoInfoResult = currentOriginalPhotoInfoResult(workflow);
+            if (workflow.getPrivacyBundlePath() == null) {
+                PrivacySafetyResult privacySafetyResult = runPrivacySafetyStep(workflow, photoInfoResult);
+                photoInfoResult = privacyPhotoInfoResult(workflow, privacySafetyResult);
+            } else {
+                photoInfoResult = currentPhotoInfoResult(workflow);
+            }
             PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
             HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
             OutlineResult outlineResult = runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
@@ -181,6 +193,8 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         }
 
         PhotoInfoResult photoInfoResult = runPhotoInfoStep(workflow);
+        PrivacySafetyResult privacySafetyResult = runPrivacySafetyStep(workflow, photoInfoResult);
+        photoInfoResult = privacyPhotoInfoResult(workflow, privacySafetyResult);
         PhotoGroupingResult photoGroupingResult = runGroupingStep(workflow, photoInfoResult);
         HeroPhotoResult heroPhotoResult = runHeroPhotoStep(workflow, photoInfoResult, photoGroupingResult);
         OutlineResult outlineResult = runOutlineStep(workflow, photoInfoResult, photoGroupingResult, heroPhotoResult);
@@ -213,6 +227,22 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         );
         advance(workflow, WorkflowStatus.PHOTO_GROUPED);
         return photoGroupingResult;
+    }
+
+    private PrivacySafetyResult runPrivacySafetyStep(Workflow workflow, PhotoInfoResult photoInfoResult) {
+        advance(workflow, WorkflowStatus.PRIVACY_REVIEWING);
+        PrivacySafetyResult privacySafetyResult = privacySafetyAgentPort.reviewPrivacy(
+            workflow.getProjectId(),
+            photoInfoResult
+        );
+        workflow.recordPrivacyArtifacts(
+            privacySafetyResult.publicPhotoCount(),
+            privacySafetyResult.excludedPhotoCount(),
+            privacySafetyResult.resultPath(),
+            privacySafetyResult.sanitizedBundlePath()
+        );
+        advance(workflow, WorkflowStatus.PRIVACY_REVIEWED);
+        return privacySafetyResult;
     }
 
     private HeroPhotoResult runHeroPhotoStep(
@@ -306,7 +336,23 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private PhotoInfoResult currentPhotoInfoResult(Workflow workflow) {
         return new PhotoInfoResult(
             workflow.getPhotoCount() == null ? 0 : workflow.getPhotoCount(),
+            workflow.getPrivacyBundlePath() == null ? workflow.getPhotoInfoBundlePath() : workflow.getPrivacyBundlePath(),
+            workflow.getBlogPath()
+        );
+    }
+
+    private PhotoInfoResult currentOriginalPhotoInfoResult(Workflow workflow) {
+        return new PhotoInfoResult(
+            workflow.getPhotoCount() == null ? 0 : workflow.getPhotoCount(),
             workflow.getPhotoInfoBundlePath(),
+            workflow.getBlogPath()
+        );
+    }
+
+    private PhotoInfoResult privacyPhotoInfoResult(Workflow workflow, PrivacySafetyResult privacySafetyResult) {
+        return new PhotoInfoResult(
+            privacySafetyResult.publicPhotoCount(),
+            privacySafetyResult.sanitizedBundlePath(),
             workflow.getBlogPath()
         );
     }

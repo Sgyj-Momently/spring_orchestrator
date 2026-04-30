@@ -16,6 +16,7 @@ public class Workflow {
     private String lastFailedStep;
     private String lastErrorMessage;
     private Integer photoCount;
+    private Integer privacyExcludedCount;
     private Integer groupCount;
     private Integer heroPhotoCount;
     private Integer outlineSectionCount;
@@ -23,6 +24,8 @@ public class Workflow {
     private Integer styledWordCount;
     private Integer reviewIssueCount;
     private String photoInfoBundlePath;
+    private String privacyResultPath;
+    private String privacyBundlePath;
     private String blogPath;
     private String groupingResultPath;
     private String heroPhotoResultPath;
@@ -83,6 +86,21 @@ public class Workflow {
         this.photoCount = photoCount;
         this.photoInfoBundlePath = bundlePath;
         this.blogPath = blogPath;
+    }
+
+    /**
+     * Records artifacts produced by the privacy safety step.
+     */
+    public void recordPrivacyArtifacts(
+        int publicPhotoCount,
+        int excludedPhotoCount,
+        String privacyResultPath,
+        String privacyBundlePath
+    ) {
+        this.photoCount = publicPhotoCount;
+        this.privacyExcludedCount = excludedPhotoCount;
+        this.privacyResultPath = privacyResultPath;
+        this.privacyBundlePath = privacyBundlePath;
     }
 
     /**
@@ -174,6 +192,10 @@ public class Workflow {
         return photoCount;
     }
 
+    public Integer getPrivacyExcludedCount() {
+        return privacyExcludedCount;
+    }
+
     public Integer getGroupCount() {
         return groupCount;
     }
@@ -200,6 +222,14 @@ public class Workflow {
 
     public String getPhotoInfoBundlePath() {
         return photoInfoBundlePath;
+    }
+
+    public String getPrivacyResultPath() {
+        return privacyResultPath;
+    }
+
+    public String getPrivacyBundlePath() {
+        return privacyBundlePath;
     }
 
     public String getBlogPath() {

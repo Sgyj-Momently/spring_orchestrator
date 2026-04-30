@@ -9,6 +9,7 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.application.port.out.result.PrivacySafetyResult;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.Workflow;
@@ -41,7 +42,8 @@ class WorkflowRunnerTest {
         Workflow updated = repository.findById(workflow.getWorkflowId()).orElseThrow();
         assertThat(executionLog).containsExactly(
             "photo-info:project-001",
-            "photo-grouping:LOCATION_BASED:artifacts/photo-info/project-001/bundle.json",
+            "privacy:artifacts/photo-info/project-001/bundle.json",
+            "photo-grouping:LOCATION_BASED:artifacts/privacy/project-001/bundle.json",
             "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
             "outline:artifacts/hero-photo/project-001/hero-result.json",
             "draft:artifacts/outline/project-001/outline.json",
@@ -69,6 +71,12 @@ class WorkflowRunnerTest {
             repository,
             new WorkflowStateMachine(),
             projectId -> new PhotoInfoResult(10, "artifacts/photo-info/project-001/bundle.json"),
+            (projectId, photoInfoResult) -> new PrivacySafetyResult(
+                10,
+                0,
+                "artifacts/privacy/project-001/privacy-result.json",
+                "artifacts/privacy/project-001/bundle.json"
+            ),
             (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
                 throw new IllegalStateException("grouping agent timeout");
             },
@@ -208,7 +216,8 @@ class WorkflowRunnerTest {
         runner.runWorkflow(workflow.getWorkflowId());
 
         assertThat(executionLog).containsExactly(
-            "photo-grouping:LOCATION_BASED:artifacts/photo-info/project-001/bundle.json",
+            "privacy:artifacts/photo-info/project-001/bundle.json",
+            "photo-grouping:LOCATION_BASED:artifacts/privacy/project-001/bundle.json",
             "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
             "outline:artifacts/hero-photo/project-001/hero-result.json",
             "draft:artifacts/outline/project-001/outline.json",
@@ -247,6 +256,15 @@ class WorkflowRunnerTest {
             projectId -> {
                 executionLog.add("photo-info:%s".formatted(projectId));
                 return new PhotoInfoResult(10, "artifacts/photo-info/project-001/bundle.json", "artifacts/photo-info/project-001/blog.md");
+            },
+            (projectId, photoInfoResult) -> {
+                executionLog.add("privacy:%s".formatted(photoInfoResult.bundlePath()));
+                return new PrivacySafetyResult(
+                    photoInfoResult.photoCount(),
+                    0,
+                    "artifacts/privacy/project-001/privacy-result.json",
+                    "artifacts/privacy/project-001/bundle.json"
+                );
             },
             (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
                 executionLog.add("photo-grouping:%s:%s".formatted(groupingStrategy, photoInfoResult.bundlePath()));

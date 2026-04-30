@@ -136,6 +136,8 @@ public class WorkflowController {
     private String artifactPath(Workflow workflow, String artifactType) {
         return switch (artifactType) {
             case "bundle", "photo-info" -> workflow.getPhotoInfoBundlePath();
+            case "privacy", "privacy-safety" -> workflow.getPrivacyResultPath();
+            case "public-bundle" -> workflow.getPrivacyBundlePath();
             case "blog" -> workflow.getBlogPath();
             case "grouping" -> workflow.getGroupingResultPath();
             case "hero", "hero-photo" -> workflow.getHeroPhotoResultPath();
@@ -154,6 +156,7 @@ public class WorkflowController {
             workflow.getGroupingStrategy(),
             workflow.getStatus(),
             workflow.getPhotoCount(),
+            workflow.getPrivacyExcludedCount(),
             workflow.getGroupCount(),
             workflow.getHeroPhotoCount(),
             workflow.getOutlineSectionCount(),
@@ -161,6 +164,8 @@ public class WorkflowController {
             workflow.getStyledWordCount(),
             workflow.getReviewIssueCount(),
             workflow.getPhotoInfoBundlePath(),
+            workflow.getPrivacyResultPath(),
+            workflow.getPrivacyBundlePath(),
             workflow.getBlogPath(),
             workflow.getGroupingResultPath(),
             workflow.getHeroPhotoResultPath(),

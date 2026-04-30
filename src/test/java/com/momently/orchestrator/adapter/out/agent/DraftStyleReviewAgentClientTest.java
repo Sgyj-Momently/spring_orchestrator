@@ -323,6 +323,41 @@ class DraftStyleReviewAgentClientTest {
     }
 
     @Test
+    @DisplayName("outline artifact가 null이면 빈 outline 계약으로 draft 요청을 보낸다")
+    void sendsFallbackOutlineWhenOutlineArtifactIsNull() throws IOException {
+        Path bundle = write("output/bundles/bundle.json", "{\"photos\":[]}");
+        Path grouping = write("output/grouping/grouping-result.json", "{\"groups\":[]}");
+        Path hero = write("output/hero-photo/hero-result.json", "{\"hero_photos\":[]}");
+        Path outline = write("output/outline/outline.json", "{\"outline\":null}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        DraftAgentClient client = new DraftAgentClient(
+            new DraftAgentProperties("http://draft.test", "/api/v1/drafts"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://draft.test/api/v1/drafts"))
+            .andExpect(content().json("""
+                {
+                  "project_id": "project-001",
+                  "outline": {"title": "project-001", "sections": []}
+                }
+                """))
+            .andRespond(withSuccess("{\"section_count\":1,\"markdown\":\"# project-001\"}", MediaType.APPLICATION_JSON));
+
+        DraftResult result = client.createDraft(
+            "project-001",
+            new PhotoInfoResult(0, bundle.toString()),
+            new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
+            new HeroPhotoResult(0, hero.toString()),
+            new OutlineResult(0, outline.toString())
+        );
+
+        assertThat(result.draftSectionCount()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
     @DisplayName("artifact 파일을 읽을 수 없으면 단계별 클라이언트가 예외로 전파한다")
     void wrapsArtifactReadFailures() {
         ObjectMapper objectMapper = new ObjectMapper();
