@@ -10,6 +10,7 @@ import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.application.port.out.result.PrivacySafetyResult;
+import com.momently.orchestrator.application.port.out.result.QualityScoreResult;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.Workflow;
@@ -43,7 +44,8 @@ class WorkflowRunnerTest {
         assertThat(executionLog).containsExactly(
             "photo-info:project-001",
             "privacy:artifacts/photo-info/project-001/bundle.json",
-            "photo-grouping:LOCATION_BASED:artifacts/privacy/project-001/bundle.json",
+            "quality:artifacts/privacy/project-001/bundle.json",
+            "photo-grouping:LOCATION_BASED:artifacts/quality/project-001/bundle.json",
             "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
             "outline:artifacts/hero-photo/project-001/hero-result.json",
             "draft:artifacts/outline/project-001/outline.json",
@@ -52,6 +54,7 @@ class WorkflowRunnerTest {
         );
         assertThat(updated.getStatus()).isEqualTo(WorkflowStatus.COMPLETED);
         assertThat(updated.getPhotoCount()).isEqualTo(10);
+        assertThat(updated.getAverageQualityScore()).isEqualTo(0.75);
         assertThat(updated.getGroupCount()).isEqualTo(3);
         assertThat(updated.getHeroPhotoCount()).isEqualTo(3);
         assertThat(updated.getOutlineSectionCount()).isEqualTo(4);
@@ -76,6 +79,12 @@ class WorkflowRunnerTest {
                 0,
                 "artifacts/privacy/project-001/privacy-result.json",
                 "artifacts/privacy/project-001/bundle.json"
+            ),
+            (projectId, photoInfoResult) -> new QualityScoreResult(
+                10,
+                0.75,
+                "artifacts/quality/project-001/quality-result.json",
+                "artifacts/quality/project-001/bundle.json"
             ),
             (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
                 throw new IllegalStateException("grouping agent timeout");
@@ -217,7 +226,37 @@ class WorkflowRunnerTest {
 
         assertThat(executionLog).containsExactly(
             "privacy:artifacts/photo-info/project-001/bundle.json",
-            "photo-grouping:LOCATION_BASED:artifacts/privacy/project-001/bundle.json",
+            "quality:artifacts/privacy/project-001/bundle.json",
+            "photo-grouping:LOCATION_BASED:artifacts/quality/project-001/bundle.json",
+            "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
+            "outline:artifacts/hero-photo/project-001/hero-result.json",
+            "draft:artifacts/outline/project-001/outline.json",
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
+        );
+    }
+
+    @Test
+    @DisplayName("FAILED 재실행 시 privacy artifact가 있으면 quality 단계부터 재개한다")
+    void resumesFromQualityWhenPrivacyArtifactExists() {
+        InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
+        workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
+        workflow.recordPrivacyArtifacts(
+            2,
+            0,
+            "artifacts/privacy/project-001/privacy-result.json",
+            "artifacts/privacy/project-001/bundle.json"
+        );
+        repository.save(workflow);
+        List<String> executionLog = new ArrayList<>();
+        WorkflowRunner runner = runner(repository, executionLog);
+
+        runner.runWorkflow(workflow.getWorkflowId());
+
+        assertThat(executionLog).containsExactly(
+            "quality:artifacts/privacy/project-001/bundle.json",
+            "photo-grouping:LOCATION_BASED:artifacts/quality/project-001/bundle.json",
             "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
             "outline:artifacts/hero-photo/project-001/hero-result.json",
             "draft:artifacts/outline/project-001/outline.json",
@@ -264,6 +303,15 @@ class WorkflowRunnerTest {
                     0,
                     "artifacts/privacy/project-001/privacy-result.json",
                     "artifacts/privacy/project-001/bundle.json"
+                );
+            },
+            (projectId, photoInfoResult) -> {
+                executionLog.add("quality:%s".formatted(photoInfoResult.bundlePath()));
+                return new QualityScoreResult(
+                    photoInfoResult.photoCount(),
+                    0.75,
+                    "artifacts/quality/project-001/quality-result.json",
+                    "artifacts/quality/project-001/bundle.json"
                 );
             },
             (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {

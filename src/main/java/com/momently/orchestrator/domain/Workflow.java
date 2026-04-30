@@ -17,6 +17,7 @@ public class Workflow {
     private String lastErrorMessage;
     private Integer photoCount;
     private Integer privacyExcludedCount;
+    private Double averageQualityScore;
     private Integer groupCount;
     private Integer heroPhotoCount;
     private Integer outlineSectionCount;
@@ -26,6 +27,8 @@ public class Workflow {
     private String photoInfoBundlePath;
     private String privacyResultPath;
     private String privacyBundlePath;
+    private String qualityScoreResultPath;
+    private String qualityScoreBundlePath;
     private String blogPath;
     private String groupingResultPath;
     private String heroPhotoResultPath;
@@ -101,6 +104,21 @@ public class Workflow {
         this.privacyExcludedCount = excludedPhotoCount;
         this.privacyResultPath = privacyResultPath;
         this.privacyBundlePath = privacyBundlePath;
+    }
+
+    /**
+     * Records artifacts produced by the quality score step.
+     */
+    public void recordQualityScoreArtifacts(
+        int scoredPhotoCount,
+        double averageQualityScore,
+        String qualityScoreResultPath,
+        String qualityScoreBundlePath
+    ) {
+        this.photoCount = scoredPhotoCount;
+        this.averageQualityScore = averageQualityScore;
+        this.qualityScoreResultPath = qualityScoreResultPath;
+        this.qualityScoreBundlePath = qualityScoreBundlePath;
     }
 
     /**
@@ -196,6 +214,10 @@ public class Workflow {
         return privacyExcludedCount;
     }
 
+    public Double getAverageQualityScore() {
+        return averageQualityScore;
+    }
+
     public Integer getGroupCount() {
         return groupCount;
     }
@@ -230,6 +252,14 @@ public class Workflow {
 
     public String getPrivacyBundlePath() {
         return privacyBundlePath;
+    }
+
+    public String getQualityScoreResultPath() {
+        return qualityScoreResultPath;
+    }
+
+    public String getQualityScoreBundlePath() {
+        return qualityScoreBundlePath;
     }
 
     public String getBlogPath() {

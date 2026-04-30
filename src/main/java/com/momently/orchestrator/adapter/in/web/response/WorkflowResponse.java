@@ -11,6 +11,8 @@ import java.util.UUID;
  * @param groupingStrategy selected grouping strategy
  * @param status current workflow status
  * @param photoCount number of public photos available for downstream steps
+ * @param privacyExcludedCount number of photos excluded by the privacy safety step
+ * @param averageQualityScore average quality score after photo quality scoring
  * @param groupCount number of groups produced by the grouping agent
  * @param heroPhotoCount number of selected hero photos produced by the hero photo agent
  * @param outlineSectionCount number of sections produced by the outline agent
@@ -18,6 +20,10 @@ import java.util.UUID;
  * @param styledWordCount word count after styling
  * @param reviewIssueCount number of issues found by the review agent
  * @param photoInfoBundlePath path to the generated photo information bundle artifact
+ * @param privacyResultPath path to the generated privacy safety result artifact
+ * @param privacyBundlePath path to the public photo bundle artifact
+ * @param qualityScoreResultPath path to the generated quality score result artifact
+ * @param qualityScoreBundlePath path to the scored photo bundle artifact
  * @param blogPath path to the generated blog Markdown artifact, or null when skipped
  * @param groupingResultPath path to the generated grouping result artifact
  * @param heroPhotoResultPath path to the generated hero photo selection result artifact
@@ -35,6 +41,7 @@ public record WorkflowResponse(
     WorkflowStatus status,
     Integer photoCount,
     Integer privacyExcludedCount,
+    Double averageQualityScore,
     Integer groupCount,
     Integer heroPhotoCount,
     Integer outlineSectionCount,
@@ -44,6 +51,8 @@ public record WorkflowResponse(
     String photoInfoBundlePath,
     String privacyResultPath,
     String privacyBundlePath,
+    String qualityScoreResultPath,
+    String qualityScoreBundlePath,
     String blogPath,
     String groupingResultPath,
     String heroPhotoResultPath,

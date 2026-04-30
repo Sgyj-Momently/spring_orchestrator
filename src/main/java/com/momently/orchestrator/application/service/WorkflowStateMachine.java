@@ -28,7 +28,9 @@ public class WorkflowStateMachine {
         );
         allowedTransitions.put(WorkflowStatus.PHOTO_INFO_EXTRACTED, EnumSet.of(WorkflowStatus.PRIVACY_REVIEWING));
         allowedTransitions.put(WorkflowStatus.PRIVACY_REVIEWING, EnumSet.of(WorkflowStatus.PRIVACY_REVIEWED));
-        allowedTransitions.put(WorkflowStatus.PRIVACY_REVIEWED, EnumSet.of(WorkflowStatus.PHOTO_GROUPING));
+        allowedTransitions.put(WorkflowStatus.PRIVACY_REVIEWED, EnumSet.of(WorkflowStatus.QUALITY_SCORING));
+        allowedTransitions.put(WorkflowStatus.QUALITY_SCORING, EnumSet.of(WorkflowStatus.QUALITY_SCORED));
+        allowedTransitions.put(WorkflowStatus.QUALITY_SCORED, EnumSet.of(WorkflowStatus.PHOTO_GROUPING));
         allowedTransitions.put(WorkflowStatus.PHOTO_GROUPING, EnumSet.of(WorkflowStatus.PHOTO_GROUPED));
         allowedTransitions.put(
             WorkflowStatus.PHOTO_GROUPED,
@@ -58,6 +60,7 @@ public class WorkflowStateMachine {
             EnumSet.of(
                 WorkflowStatus.PHOTO_INFO_EXTRACTING,
                 WorkflowStatus.PRIVACY_REVIEWING,
+                WorkflowStatus.QUALITY_SCORING,
                 WorkflowStatus.PHOTO_GROUPING,
                 WorkflowStatus.HERO_PHOTO_SELECTING,
                 WorkflowStatus.OUTLINE_CREATING,
