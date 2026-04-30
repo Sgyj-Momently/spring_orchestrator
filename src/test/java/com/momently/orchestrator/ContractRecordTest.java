@@ -11,6 +11,7 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.application.port.out.result.QualityScoreResult;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.WorkflowStatus;
@@ -38,6 +39,7 @@ class ContractRecordTest {
             WorkflowStatus.CREATED,
             10,
             1,
+            0.75,
             3,
             2,
             4,
@@ -47,6 +49,8 @@ class ContractRecordTest {
             "bundle.json",
             "privacy-result.json",
             "public-bundle.json",
+            "quality-result.json",
+            "scored-bundle.json",
             "blog.md",
             "grouping-result.json",
             "hero-result.json",
@@ -59,6 +63,7 @@ class ContractRecordTest {
         );
         PhotoInfoResult photoInfoResult = new PhotoInfoResult(10, "bundle.json");
         PhotoGroupingResult photoGroupingResult = new PhotoGroupingResult("TIME_BASED", 3);
+        QualityScoreResult qualityScoreResult = new QualityScoreResult(10, 0.75, "quality-result.json", "scored-bundle.json");
         HeroPhotoResult heroPhotoResult = new HeroPhotoResult(2);
         OutlineResult outlineResult = new OutlineResult(4, "outline.json");
         DraftResult draftResult = new DraftResult(4, "draft.json");
@@ -70,10 +75,13 @@ class ContractRecordTest {
         assertThat(response.workflowId()).isEqualTo(workflowId);
         assertThat(response.status()).isEqualTo(WorkflowStatus.CREATED);
         assertThat(response.photoInfoBundlePath()).isEqualTo("bundle.json");
+        assertThat(response.averageQualityScore()).isEqualTo(0.75);
+        assertThat(response.qualityScoreResultPath()).isEqualTo("quality-result.json");
         assertThat(response.groupingResultPath()).isEqualTo("grouping-result.json");
         assertThat(response.reviewResultPath()).isEqualTo("final.json");
         assertThat(photoInfoResult.photoCount()).isEqualTo(10);
         assertThat(photoGroupingResult.groupCount()).isEqualTo(3);
+        assertThat(qualityScoreResult.scoredBundlePath()).isEqualTo("scored-bundle.json");
         assertThat(heroPhotoResult.heroPhotoCount()).isEqualTo(2);
         assertThat(heroPhotoResult.resultPath()).isNull();
         assertThat(outlineResult.outlineSectionCount()).isEqualTo(4);

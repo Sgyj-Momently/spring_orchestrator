@@ -138,6 +138,8 @@ public class WorkflowController {
             case "bundle", "photo-info" -> workflow.getPhotoInfoBundlePath();
             case "privacy", "privacy-safety" -> workflow.getPrivacyResultPath();
             case "public-bundle" -> workflow.getPrivacyBundlePath();
+            case "quality", "quality-score" -> workflow.getQualityScoreResultPath();
+            case "scored-bundle" -> workflow.getQualityScoreBundlePath();
             case "blog" -> workflow.getBlogPath();
             case "grouping" -> workflow.getGroupingResultPath();
             case "hero", "hero-photo" -> workflow.getHeroPhotoResultPath();
@@ -157,6 +159,7 @@ public class WorkflowController {
             workflow.getStatus(),
             workflow.getPhotoCount(),
             workflow.getPrivacyExcludedCount(),
+            workflow.getAverageQualityScore(),
             workflow.getGroupCount(),
             workflow.getHeroPhotoCount(),
             workflow.getOutlineSectionCount(),
@@ -166,6 +169,8 @@ public class WorkflowController {
             workflow.getPhotoInfoBundlePath(),
             workflow.getPrivacyResultPath(),
             workflow.getPrivacyBundlePath(),
+            workflow.getQualityScoreResultPath(),
+            workflow.getQualityScoreBundlePath(),
             workflow.getBlogPath(),
             workflow.getGroupingResultPath(),
             workflow.getHeroPhotoResultPath(),

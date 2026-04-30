@@ -25,6 +25,9 @@ agents:
   privacy-safety:
     base-url: http://127.0.0.1:8700
     endpoint: /api/v1/privacy-safety
+  quality-score:
+    base-url: http://127.0.0.1:8800
+    endpoint: /api/v1/quality-scores
   hero-photo:
     base-url: http://127.0.0.1:8200
     endpoint: /api/v1/hero-photos
