@@ -6,9 +6,13 @@ import static org.mockito.Mockito.mockStatic;
 import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowResponse;
 import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
+import com.momently.orchestrator.application.port.out.result.DraftResult;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
+import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.application.port.out.result.ReviewResult;
+import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,17 +40,27 @@ class ContractRecordTest {
             3,
             2,
             4,
+            4,
+            150,
+            0,
             "bundle.json",
             "blog.md",
             "grouping-result.json",
             "hero-result.json",
             "outline.json",
+            "draft.json",
+            "styled.json",
+            "final.json",
             null,
             null
         );
         PhotoInfoResult photoInfoResult = new PhotoInfoResult(10, "bundle.json");
         PhotoGroupingResult photoGroupingResult = new PhotoGroupingResult("TIME_BASED", 3);
         HeroPhotoResult heroPhotoResult = new HeroPhotoResult(2);
+        OutlineResult outlineResult = new OutlineResult(4, "outline.json");
+        DraftResult draftResult = new DraftResult(4, "draft.json");
+        StyleResult styleResult = new StyleResult(150, "styled.json");
+        ReviewResult reviewResult = new ReviewResult(0, "final.json");
 
         assertThat(request.projectId()).isEqualTo("project-001");
         assertThat(command.groupingStrategy()).isEqualTo("LOCATION_BASED");
@@ -54,10 +68,15 @@ class ContractRecordTest {
         assertThat(response.status()).isEqualTo(WorkflowStatus.CREATED);
         assertThat(response.photoInfoBundlePath()).isEqualTo("bundle.json");
         assertThat(response.groupingResultPath()).isEqualTo("grouping-result.json");
+        assertThat(response.reviewResultPath()).isEqualTo("final.json");
         assertThat(photoInfoResult.photoCount()).isEqualTo(10);
         assertThat(photoGroupingResult.groupCount()).isEqualTo(3);
         assertThat(heroPhotoResult.heroPhotoCount()).isEqualTo(2);
         assertThat(heroPhotoResult.resultPath()).isNull();
+        assertThat(outlineResult.outlineSectionCount()).isEqualTo(4);
+        assertThat(draftResult.draftSectionCount()).isEqualTo(4);
+        assertThat(styleResult.wordCount()).isEqualTo(150);
+        assertThat(reviewResult.issueCount()).isZero();
     }
 
     @Test

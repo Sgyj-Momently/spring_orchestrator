@@ -3,14 +3,14 @@ package com.momently.orchestrator.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
-import com.momently.orchestrator.application.port.out.PhotoGroupingAgentPort;
-import com.momently.orchestrator.application.port.out.PhotoInfoAgentPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
+import com.momently.orchestrator.application.port.out.result.DraftResult;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
+import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
-import com.momently.orchestrator.application.port.out.result.OutlineResult;
+import com.momently.orchestrator.application.port.out.result.ReviewResult;
+import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.ArrayList;
@@ -28,94 +28,44 @@ import org.junit.jupiter.api.Test;
 class WorkflowRunnerTest {
 
     @Test
-    @DisplayName("러너는 사진 정보 추출 후 그룹화, 대표 사진 선택, 개요 생성을 순서대로 실행한다")
-    void runsPhotoInfoThenGroupingThenHeroPhotoThenOutlineInOrder() {
+    @DisplayName("러너는 사진 정보부터 최종 검수까지 순서대로 실행한다")
+    void runsFullWorkflowInOrder() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
         List<String> executionLog = new ArrayList<>();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.CREATED
-        );
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.CREATED);
         repository.save(workflow);
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            repository,
-            new WorkflowStateMachine(),
-            projectId -> {
-                executionLog.add("photo-info:%s".formatted(projectId));
-                return new PhotoInfoResult(
-                    10,
-                    "artifacts/photo-info/project-001/bundle.json",
-                    "artifacts/photo-info/project-001/blog.md"
-                );
-            },
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
-                executionLog.add("photo-grouping:%s:%s".formatted(groupingStrategy, photoInfoResult.bundlePath()));
-                return new PhotoGroupingResult(
-                    "LOCATION_BASED",
-                    3,
-                    "artifacts/photo-grouping/project-001/grouping-result.json"
-                );
-            },
-            (projectId, photoInfoResult, photoGroupingResult) -> {
-                executionLog.add(
-                    "hero-photo:%s:%s"
-                        .formatted(photoInfoResult.bundlePath(), photoGroupingResult.resultPath())
-                );
-                return new HeroPhotoResult(
-                    photoGroupingResult.groupCount(),
-                    "artifacts/hero-photo/project-001/hero-result.json"
-                );
-            },
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> {
-                executionLog.add("outline:%s".formatted(heroPhotoResult.resultPath()));
-                return new OutlineResult(4, "artifacts/outline/project-001/outline.json");
-            }
-        );
+        WorkflowRunner runner = runner(repository, executionLog);
 
-        workflowRunner.runWorkflow(workflow.getWorkflowId());
+        runner.runWorkflow(workflow.getWorkflowId());
+
         Workflow updated = repository.findById(workflow.getWorkflowId()).orElseThrow();
-
         assertThat(executionLog).containsExactly(
             "photo-info:project-001",
             "photo-grouping:LOCATION_BASED:artifacts/photo-info/project-001/bundle.json",
-            "hero-photo:artifacts/photo-info/project-001/bundle.json:artifacts/photo-grouping/project-001/grouping-result.json",
-            "outline:artifacts/hero-photo/project-001/hero-result.json"
+            "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
+            "outline:artifacts/hero-photo/project-001/hero-result.json",
+            "draft:artifacts/outline/project-001/outline.json",
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
         );
-        assertThat(updated.getStatus()).isEqualTo(WorkflowStatus.OUTLINE_CREATED);
+        assertThat(updated.getStatus()).isEqualTo(WorkflowStatus.COMPLETED);
         assertThat(updated.getPhotoCount()).isEqualTo(10);
         assertThat(updated.getGroupCount()).isEqualTo(3);
         assertThat(updated.getHeroPhotoCount()).isEqualTo(3);
         assertThat(updated.getOutlineSectionCount()).isEqualTo(4);
-        assertThat(updated.getPhotoInfoBundlePath()).isEqualTo("artifacts/photo-info/project-001/bundle.json");
-        assertThat(updated.getBlogPath()).isEqualTo("artifacts/photo-info/project-001/blog.md");
-        assertThat(updated.getGroupingResultPath())
-            .isEqualTo("artifacts/photo-grouping/project-001/grouping-result.json");
-        assertThat(updated.getHeroPhotoResultPath())
-            .isEqualTo("artifacts/hero-photo/project-001/hero-result.json");
-        assertThat(updated.getOutlineResultPath())
-            .isEqualTo("artifacts/outline/project-001/outline.json");
-        assertThat(repository.findById(workflow.getWorkflowId()))
-            .get()
-            .extracting(Workflow::getStatus)
-            .isEqualTo(WorkflowStatus.OUTLINE_CREATED);
+        assertThat(updated.getDraftSectionCount()).isEqualTo(4);
+        assertThat(updated.getStyledWordCount()).isEqualTo(150);
+        assertThat(updated.getReviewIssueCount()).isZero();
+        assertThat(updated.getReviewResultPath()).isEqualTo("artifacts/review/project-001/final.json");
     }
 
     @Test
     @DisplayName("중간 단계 실패 시 워크플로를 FAILED로 기록한다")
     void marksWorkflowAsFailedWhenAgentThrowsException() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.CREATED
-        );
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.CREATED);
         repository.save(workflow);
-        WorkflowRunner workflowRunner = new WorkflowRunner(
+        WorkflowRunner runner = new WorkflowRunner(
             repository,
             new WorkflowStateMachine(),
             projectId -> new PhotoInfoResult(10, "artifacts/photo-info/project-001/bundle.json"),
@@ -123,10 +73,13 @@ class WorkflowRunnerTest {
                 throw new IllegalStateException("grouping agent timeout");
             },
             (projectId, photoInfoResult, photoGroupingResult) -> new HeroPhotoResult(0, null),
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null)
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null),
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult) -> new DraftResult(0, null),
+            (projectId, draftResult) -> new StyleResult(0, null),
+            (projectId, photoInfoResult, styleResult) -> new ReviewResult(0, null)
         );
 
-        assertThatThrownBy(() -> workflowRunner.runWorkflow(workflow.getWorkflowId()))
+        assertThatThrownBy(() -> runner.runWorkflow(workflow.getWorkflowId()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("grouping agent timeout");
 
@@ -137,140 +90,130 @@ class WorkflowRunnerTest {
     }
 
     @Test
-    @DisplayName("이미 outline artifact가 있으면 재실행 시 아무 에이전트도 호출하지 않는다")
-    void skipsAllStepsWhenOutlineAlreadyExists() {
+    @DisplayName("최종 artifact가 있으면 재실행 시 아무 에이전트도 호출하지 않는다")
+    void skipsAllStepsWhenFinalReviewAlreadyExists() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.OUTLINE_CREATED
-        );
-        workflow.recordOutlineArtifacts(4, "artifacts/outline/project-001/outline.json");
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, "artifacts/review/project-001/final.json");
         repository.save(workflow);
         List<String> executionLog = new ArrayList<>();
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            repository,
-            new WorkflowStateMachine(),
-            projectId -> {
-                executionLog.add("photo-info");
-                return new PhotoInfoResult(0, null);
-            },
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
-                executionLog.add("grouping");
-                return new PhotoGroupingResult("LOCATION_BASED", 0, null);
-            },
-            (projectId, photoInfoResult, photoGroupingResult) -> {
-                executionLog.add("hero");
-                return new HeroPhotoResult(0, null);
-            },
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> {
-                executionLog.add("outline");
-                return new OutlineResult(0, null);
-            }
-        );
+        WorkflowRunner runner = runner(repository, executionLog);
 
-        workflowRunner.runWorkflow(workflow.getWorkflowId());
+        runner.runWorkflow(workflow.getWorkflowId());
 
         assertThat(executionLog).isEmpty();
         assertThat(repository.findById(workflow.getWorkflowId())).get()
             .extracting(Workflow::getStatus)
-            .isEqualTo(WorkflowStatus.OUTLINE_CREATED);
+            .isEqualTo(WorkflowStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("FAILED 재실행 시 outline artifact가 있으면 초안 단계부터 재개한다")
+    void resumesFromDraftWhenOutlineArtifactExists() {
+        InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
+        workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
+        workflow.recordGroupingArtifacts(1, "artifacts/photo-grouping/project-001/grouping-result.json");
+        workflow.recordHeroPhotoArtifacts(1, "artifacts/hero-photo/project-001/hero-result.json");
+        workflow.recordOutlineArtifacts(2, "artifacts/outline/project-001/outline.json");
+        repository.save(workflow);
+        List<String> executionLog = new ArrayList<>();
+        WorkflowRunner runner = runner(repository, executionLog);
+
+        runner.runWorkflow(workflow.getWorkflowId());
+
+        assertThat(executionLog).containsExactly(
+            "draft:artifacts/outline/project-001/outline.json",
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
+        );
+        assertThat(repository.findById(workflow.getWorkflowId())).get()
+            .extracting(Workflow::getStatus)
+            .isEqualTo(WorkflowStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("FAILED 재실행 시 draft artifact가 있으면 style 단계부터 재개한다")
+    void resumesFromStyleWhenDraftArtifactExists() {
+        InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
+        workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
+        workflow.recordDraftArtifacts(2, "artifacts/draft/project-001/draft.json");
+        repository.save(workflow);
+        List<String> executionLog = new ArrayList<>();
+        WorkflowRunner runner = runner(repository, executionLog);
+
+        runner.runWorkflow(workflow.getWorkflowId());
+
+        assertThat(executionLog).containsExactly(
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
+        );
+        assertThat(repository.findById(workflow.getWorkflowId())).get()
+            .extracting(Workflow::getStatus)
+            .isEqualTo(WorkflowStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("FAILED 재실행 시 style artifact가 있으면 review 단계부터 재개한다")
+    void resumesFromReviewWhenStyleArtifactExists() {
+        InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
+        workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
+        workflow.recordStyleArtifacts(140, "artifacts/style/project-001/styled.json");
+        repository.save(workflow);
+        List<String> executionLog = new ArrayList<>();
+        WorkflowRunner runner = runner(repository, executionLog);
+
+        runner.runWorkflow(workflow.getWorkflowId());
+
+        assertThat(executionLog).containsExactly("review:artifacts/style/project-001/styled.json");
+        assertThat(repository.findById(workflow.getWorkflowId())).get()
+            .extracting(Workflow::getStatus)
+            .isEqualTo(WorkflowStatus.COMPLETED);
     }
 
     @Test
     @DisplayName("FAILED 재실행 시 grouping artifact가 있으면 대표 사진 단계부터 재개한다")
-    void resumesFromHeroPhotoWhenGroupingArtifactExists() {
+    void resumesFromHeroWhenGroupingArtifactExists() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.FAILED
-        );
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
         workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
         workflow.recordGroupingArtifacts(1, "artifacts/photo-grouping/project-001/grouping-result.json");
         repository.save(workflow);
         List<String> executionLog = new ArrayList<>();
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            repository,
-            new WorkflowStateMachine(),
-            projectId -> {
-                executionLog.add("photo-info");
-                return new PhotoInfoResult(0, null);
-            },
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
-                executionLog.add("grouping");
-                return new PhotoGroupingResult("LOCATION_BASED", 0, null);
-            },
-            (projectId, photoInfoResult, photoGroupingResult) -> {
-                executionLog.add("hero:" + photoGroupingResult.resultPath());
-                return new HeroPhotoResult(1, "artifacts/hero-photo/project-001/hero-result.json");
-            },
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> {
-                executionLog.add("outline:" + heroPhotoResult.resultPath());
-                return new OutlineResult(3, "artifacts/outline/project-001/outline.json");
-            }
-        );
+        WorkflowRunner runner = runner(repository, executionLog);
 
-        workflowRunner.runWorkflow(workflow.getWorkflowId());
+        runner.runWorkflow(workflow.getWorkflowId());
 
         assertThat(executionLog).containsExactly(
-            "hero:artifacts/photo-grouping/project-001/grouping-result.json",
-            "outline:artifacts/hero-photo/project-001/hero-result.json"
+            "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
+            "outline:artifacts/hero-photo/project-001/hero-result.json",
+            "draft:artifacts/outline/project-001/outline.json",
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
         );
-        assertThat(repository.findById(workflow.getWorkflowId())).get()
-            .extracting(Workflow::getStatus)
-            .isEqualTo(WorkflowStatus.OUTLINE_CREATED);
     }
 
     @Test
-    @DisplayName("FAILED 재실행 시 photo info artifact만 있으면 그룹화 단계부터 재개한다")
+    @DisplayName("FAILED 재실행 시 photo-info artifact가 있으면 grouping 단계부터 재개한다")
     void resumesFromGroupingWhenPhotoInfoArtifactExists() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.FAILED
-        );
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.FAILED);
         workflow.recordPhotoInfoArtifacts(2, "artifacts/photo-info/project-001/bundle.json", null);
         repository.save(workflow);
         List<String> executionLog = new ArrayList<>();
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            repository,
-            new WorkflowStateMachine(),
-            projectId -> {
-                executionLog.add("photo-info");
-                return new PhotoInfoResult(0, null);
-            },
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
-                executionLog.add("grouping:" + photoInfoResult.bundlePath());
-                return new PhotoGroupingResult(
-                    "LOCATION_BASED",
-                    1,
-                    "artifacts/photo-grouping/project-001/grouping-result.json"
-                );
-            },
-            (projectId, photoInfoResult, photoGroupingResult) -> {
-                executionLog.add("hero");
-                return new HeroPhotoResult(1, "artifacts/hero-photo/project-001/hero-result.json");
-            },
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> {
-                executionLog.add("outline");
-                return new OutlineResult(3, "artifacts/outline/project-001/outline.json");
-            }
-        );
+        WorkflowRunner runner = runner(repository, executionLog);
 
-        workflowRunner.runWorkflow(workflow.getWorkflowId());
+        runner.runWorkflow(workflow.getWorkflowId());
 
         assertThat(executionLog).containsExactly(
-            "grouping:artifacts/photo-info/project-001/bundle.json",
-            "hero",
-            "outline"
+            "photo-grouping:LOCATION_BASED:artifacts/photo-info/project-001/bundle.json",
+            "hero-photo:artifacts/photo-grouping/project-001/grouping-result.json",
+            "outline:artifacts/hero-photo/project-001/hero-result.json",
+            "draft:artifacts/outline/project-001/outline.json",
+            "style:artifacts/draft/project-001/draft.json",
+            "review:artifacts/style/project-001/styled.json"
         );
     }
 
@@ -278,24 +221,11 @@ class WorkflowRunnerTest {
     @DisplayName("실행 중인 워크플로는 중복 실행을 거부한다")
     void rejectsAlreadyRunningWorkflow() {
         InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
-        Workflow workflow = new Workflow(
-            UUID.randomUUID(),
-            "project-001",
-            "LOCATION_BASED",
-            90,
-            WorkflowStatus.PHOTO_GROUPING
-        );
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.REVIEWING);
         repository.save(workflow);
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            repository,
-            new WorkflowStateMachine(),
-            projectId -> new PhotoInfoResult(0, null),
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> new PhotoGroupingResult("LOCATION_BASED", 0, null),
-            (projectId, photoInfoResult, photoGroupingResult) -> new HeroPhotoResult(0, null),
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null)
-        );
+        WorkflowRunner runner = runner(repository, new ArrayList<>());
 
-        assertThatThrownBy(() -> workflowRunner.runWorkflow(workflow.getWorkflowId()))
+        assertThatThrownBy(() -> runner.runWorkflow(workflow.getWorkflowId()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Workflow is already running");
     }
@@ -303,18 +233,46 @@ class WorkflowRunnerTest {
     @Test
     @DisplayName("존재하지 않는 워크플로 실행 요청은 실패한다")
     void failsWhenWorkflowIsMissing() {
-        WorkflowRunner workflowRunner = new WorkflowRunner(
-            new InMemoryWorkflowRepositoryStub(),
-            new WorkflowStateMachine(),
-            projectId -> new PhotoInfoResult(0, null),
-            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> new PhotoGroupingResult("LOCATION_BASED", 0, null),
-            (projectId, photoInfoResult, photoGroupingResult) -> new HeroPhotoResult(0, null),
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null)
-        );
+        WorkflowRunner runner = runner(new InMemoryWorkflowRepositoryStub(), new ArrayList<>());
 
-        assertThatThrownBy(() -> workflowRunner.runWorkflow(UUID.randomUUID()))
+        assertThatThrownBy(() -> runner.runWorkflow(UUID.randomUUID()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Workflow not found");
+    }
+
+    private WorkflowRunner runner(InMemoryWorkflowRepositoryStub repository, List<String> executionLog) {
+        return new WorkflowRunner(
+            repository,
+            new WorkflowStateMachine(),
+            projectId -> {
+                executionLog.add("photo-info:%s".formatted(projectId));
+                return new PhotoInfoResult(10, "artifacts/photo-info/project-001/bundle.json", "artifacts/photo-info/project-001/blog.md");
+            },
+            (projectId, groupingStrategy, timeWindowMinutes, photoInfoResult) -> {
+                executionLog.add("photo-grouping:%s:%s".formatted(groupingStrategy, photoInfoResult.bundlePath()));
+                return new PhotoGroupingResult("LOCATION_BASED", 3, "artifacts/photo-grouping/project-001/grouping-result.json");
+            },
+            (projectId, photoInfoResult, photoGroupingResult) -> {
+                executionLog.add("hero-photo:%s".formatted(photoGroupingResult.resultPath()));
+                return new HeroPhotoResult(3, "artifacts/hero-photo/project-001/hero-result.json");
+            },
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> {
+                executionLog.add("outline:%s".formatted(heroPhotoResult.resultPath()));
+                return new OutlineResult(4, "artifacts/outline/project-001/outline.json");
+            },
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult) -> {
+                executionLog.add("draft:%s".formatted(outlineResult.resultPath()));
+                return new DraftResult(4, "artifacts/draft/project-001/draft.json");
+            },
+            (projectId, draftResult) -> {
+                executionLog.add("style:%s".formatted(draftResult.resultPath()));
+                return new StyleResult(150, "artifacts/style/project-001/styled.json");
+            },
+            (projectId, photoInfoResult, styleResult) -> {
+                executionLog.add("review:%s".formatted(styleResult.resultPath()));
+                return new ReviewResult(0, "artifacts/review/project-001/final.json");
+            }
+        );
     }
 
     /**

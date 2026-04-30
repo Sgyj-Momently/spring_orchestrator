@@ -96,6 +96,10 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
             );
         }
 
+        if (!properties.force() && Files.isRegularFile(bundlePath)) {
+            return readResult(bundlePath, blogPath);
+        }
+
         commandExecutor.execute(buildCommand(inputDir, outputDir));
 
         if (!Files.isRegularFile(bundlePath)) {

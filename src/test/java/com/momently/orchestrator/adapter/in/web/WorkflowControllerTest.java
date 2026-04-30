@@ -14,6 +14,7 @@ import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.UUID;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * 워크플로 웹 어댑터의 요청/응답 계약을 검증한다.
@@ -39,6 +42,9 @@ class WorkflowControllerTest {
 
     @MockBean
     private RunWorkflowUseCase runWorkflowUseCase;
+
+    @TempDir
+    Path tempDir;
 
     @Test
     @DisplayName("워크플로 생성 요청을 받아 HATEOAS 응답을 반환한다")
@@ -115,5 +121,72 @@ class WorkflowControllerTest {
         mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
             .andExpect(status().isAccepted())
             .andExpect(header().exists("Location"));
+    }
+
+    @Test
+    @DisplayName("워크플로 artifact JSON을 조회한다")
+    void getsJsonArtifact() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f13");
+        Path finalPath = tempDir.resolve("final.json");
+        Files.writeString(finalPath, "{\"review_status\":\"ok\"}");
+        Workflow workflow = new Workflow(workflowId, "project-003", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/review", workflowId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.artifactType").value("review"))
+            .andExpect(jsonPath("$.contentType").value("application/json"))
+            .andExpect(jsonPath("$.json.review_status").value("ok"));
+    }
+
+    @Test
+    @DisplayName("워크플로 artifact 텍스트를 조회한다")
+    void getsTextArtifact() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f14");
+        Path blogPath = tempDir.resolve("blog.md");
+        Files.writeString(blogPath, "# Blog");
+        Workflow workflow = new Workflow(workflowId, "project-004", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordPhotoInfoArtifacts(1, tempDir.resolve("bundle.json").toString(), blogPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/blog", workflowId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.contentType").value("text/plain"))
+            .andExpect(jsonPath("$.text").value("# Blog"));
+    }
+
+    @Test
+    @DisplayName("없는 artifact는 404를 반환한다")
+    void returnsNotFoundForMissingArtifact() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f15");
+        Workflow workflow = new Workflow(workflowId, "project-005", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/review", workflowId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("알 수 없는 artifact 타입도 404를 반환한다")
+    void returnsNotFoundForUnknownArtifactType() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f16");
+        Workflow workflow = new Workflow(workflowId, "project-006", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/unknown", workflowId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("경로는 있지만 파일이 없으면 404를 반환한다")
+    void returnsNotFoundForMissingArtifactFile() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f17");
+        Workflow workflow = new Workflow(workflowId, "project-007", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, tempDir.resolve("missing.json").toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/final", workflowId))
+            .andExpect(status().isNotFound());
     }
 }

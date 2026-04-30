@@ -89,6 +89,26 @@ class LocalPhotoInfoPipelineAdapterTest {
     }
 
     @Test
+    @DisplayName("force가 false이고 기존 bundle이 있으면 CLI를 재실행하지 않고 재사용한다")
+    void reusesExistingBundleWhenForceIsDisabled() throws IOException {
+        Path inputRoot = tempDir.resolve("input");
+        Path outputRoot = tempDir.resolve("output");
+        Files.createDirectories(inputRoot.resolve("project-001"));
+        writeBundle(outputRoot.resolve("project-001").resolve("bundles").resolve("bundle.json"), 2);
+        List<String> capturedCommand = new ArrayList<>();
+        LocalPhotoInfoPipelineAdapter adapter = new LocalPhotoInfoPipelineAdapter(
+            properties(inputRoot, outputRoot, true),
+            new ObjectMapper(),
+            capturedCommand::addAll
+        );
+
+        PhotoInfoResult result = adapter.extractPhotoInfo("project-001");
+
+        assertThat(capturedCommand).isEmpty();
+        assertThat(result.photoCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("파이프라인 후 bundle 파일이 없으면 실패로 처리한다")
     void failsWhenBundleFileMissing() throws IOException {
         Path inputRoot = tempDir.resolve("input");
