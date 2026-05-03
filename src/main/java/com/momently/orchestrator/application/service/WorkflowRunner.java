@@ -132,8 +132,8 @@ public class WorkflowRunner implements RunWorkflowUseCase {
      * 완료된 아티팩트를 기준으로 재개 지점을 결정하고 실행한다.
      *
      * <p>아티팩트 경로가 이미 기록되어 있으면 해당 단계는 건너뛴다.
-     * groupingResultPath → hero photo 단계부터,
-     * photoInfoBundlePath → grouping 단계부터,
+     * {@code groupingResultPath} 가 있으면 대표 사진 선택 단계부터,
+     * {@code photoInfoBundlePath} 만 있으면 그룹화 단계부터,
      * 둘 다 없으면 처음부터 실행한다.</p>
      */
     private void runFromResumePoint(Workflow workflow) {
@@ -349,7 +349,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
 
     private StyleResult runStyleStep(Workflow workflow, DraftResult draftResult) {
         advance(workflow, WorkflowStatus.STYLE_APPLYING);
-        StyleResult styleResult = styleAgentPort.applyStyle(workflow.getProjectId(), draftResult);
+        StyleResult styleResult = styleAgentPort.applyStyle(workflow.getProjectId(), draftResult, workflow.getVoiceProfileId());
         workflow.recordStyleArtifacts(styleResult.wordCount(), styleResult.resultPath());
         advance(workflow, WorkflowStatus.STYLE_APPLIED);
         return styleResult;

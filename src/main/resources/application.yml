@@ -1,6 +1,33 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 spring:
   profiles:
     default: memory,stub-agents
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 140MB
+
+momently:
+  web:
+    cors:
+      allowed-origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+  security:
+    # 로컬 전용 예시값이다. 배포 환경에서는 반드시 덮어쓴다.
+    username: console
+    password: changeme
+    jwt-secret: local-dev-console-jwt-signing-secret-min32b
+    jwt-expiration-seconds: 86400
+  upload:
+    max-files: 40
+    max-bytes-per-file: 26214400
+    max-total-bytes: 125829120
 
 logging:
   level:

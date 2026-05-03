@@ -6,7 +6,7 @@ import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 
 /**
- * 개요 생성(outline) 단계를 application 계층에서 호출하기 위한 outbound 포트다.
+ * 개요 생성(outline) 단계를 애플리케이션 계층에서 호출하기 위한 아웃바운드 포트다.
  */
 public interface OutlineAgentPort {
 

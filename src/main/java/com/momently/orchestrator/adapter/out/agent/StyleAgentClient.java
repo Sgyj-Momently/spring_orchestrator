@@ -12,7 +12,9 @@ import com.momently.orchestrator.config.StyleAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -35,18 +37,45 @@ public class StyleAgentClient implements StyleAgentPort {
     }
 
     @Override
-    public StyleResult applyStyle(String projectId, DraftResult draftResult) {
+    public StyleResult applyStyle(String projectId, DraftResult draftResult, String voiceProfileId) {
         Path draftPath = Path.of(draftResult.resultPath());
         Path resultPath = siblingStagePath(draftPath, "style", "styled.json");
         JsonNode draft = readJson(draftPath);
-        JsonNode body = post(Map.of(
-            "project_id", projectId,
-            "draft_markdown", draft.path("markdown").asText(""),
-            "style", "warm_blog"
-        ));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("project_id", projectId);
+        payload.put("draft_markdown", draft.path("markdown").asText(""));
+        payload.put("style", "warm_blog");
+        if (voiceProfileId != null && !voiceProfileId.isBlank()) {
+            payload.put("voice_profile_id", voiceProfileId);
+            loadVoiceProfile(voiceProfileId).ifPresent(profile -> payload.put("voice_profile", profile));
+        }
+        JsonNode body = post(payload);
+        requireStyleSemanticOk(body);
         writeResult(resultPath, body, "style_result");
         StyleAgentResponse response = convert(body, StyleAgentResponse.class);
         return new StyleResult(response.wordCount(), resultPath.toString());
+    }
+
+    private Optional<JsonNode> loadVoiceProfile(String voiceProfileId) {
+        for (Path root : java.util.List.of(Path.of("../voice_profiles"), Path.of("voice_profiles"))) {
+            Path profilePath = root.resolve(voiceProfileId).resolve("profile.json").normalize();
+            if (Files.exists(profilePath)) {
+                return Optional.of(readJson(profilePath));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** ok · ok_llm · ok_fallback: … 등 성공 접두 허용 (error: 패턴 차단) */
+    private static void requireStyleSemanticOk(JsonNode body) {
+        JsonNode n = body.get("style_status");
+        if (n == null || n.isNull() || n.asText("").isBlank()) {
+            return;
+        }
+        String s = n.asText("").strip();
+        if (!s.startsWith("ok")) {
+            throw new IllegalStateException("Style agent style_status does not indicate success: " + s);
+        }
     }
 
     private JsonNode post(Map<String, Object> payload) {
@@ -106,4 +135,3 @@ public class StyleAgentClient implements StyleAgentPort {
     record StyleAgentResponse(@JsonProperty("word_count") int wordCount) {
     }
 }
-

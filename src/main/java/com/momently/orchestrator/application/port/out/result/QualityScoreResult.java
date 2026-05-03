@@ -5,8 +5,8 @@ package com.momently.orchestrator.application.port.out.result;
  *
  * @param scoredPhotoCount 점수가 부여된 사진 수
  * @param averageScore 평균 품질 점수
- * @param resultPath quality score JSON artifact 경로
- * @param scoredBundlePath 품질 점수를 포함한 bundle JSON artifact 경로
+ * @param resultPath 품질 점수 결과 JSON 아티팩트 파일 경로
+ * @param scoredBundlePath 점수가 반영된 bundle JSON 아티팩트 파일 경로
  */
 public record QualityScoreResult(
     int scoredPhotoCount,

@@ -5,6 +5,9 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +27,32 @@ public class StubOutlineAgentAdapter implements OutlineAgentPort {
     ) {
         int sectionCount = Math.max(0, photoGroupingResult.groupCount());
         String resultPath = "output/%s/outline/outline.json".formatted(projectId);
+        writeJson(
+            Path.of(resultPath),
+            """
+            {
+              "artifact_type": "outline_result",
+              "project_id": "%s",
+              "section_count": %d,
+              "outline": {
+                "title": "%s",
+                "sections": []
+              }
+            }
+            """.formatted(projectId, sectionCount, projectId)
+        );
         return new OutlineResult(sectionCount, resultPath);
+    }
+
+    private static void writeJson(Path path, String json) {
+        try {
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, json);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to write stub artifact: " + path, exception);
+        }
     }
 }

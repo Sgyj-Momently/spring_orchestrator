@@ -18,11 +18,11 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * 현재 CLI 형태인 photo_exif_llm_pipeline을 로컬 프로세스로 실행하는 outbound adapter다.
+ * 현재 CLI 형태인 photo_exif_llm_pipeline을 로컬 프로세스로 실행하는 아웃바운드 어댑터다.
  *
  * <p>사진 정보 추출 모듈은 아직 FastAPI 서버가 아니라 {@code run_pipeline.py} 명령으로 동작한다.
  * 이 adapter는 Spring 오케스트레이터가 그 CLI 실행 방식을 직접 품지 않도록 감싸며,
- * {@link PhotoInfoAgentPort} 계약에 맞춰 처리 사진 수와 bundle artifact 경로만 반환한다.</p>
+ * {@link PhotoInfoAgentPort} 계약에 맞춰 처리 사진 수와 bundle 아티팩트 경로만 반환한다.</p>
  *
  * <p>{@code local-photo-info} 프로필에서만 활성화된다. 프로세스 시작 실패, 타임아웃, 비정상 종료,
  * bundle 경로 누락, bundle JSON 계약 위반, bundle 읽기 실패는 모두 {@link IllegalStateException}으로
@@ -45,7 +45,7 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      * 생성자를 통해 executor를 주입해, Python 프로세스를 띄우지 않고 명령 구성과 결과 파일 읽기만 검증한다.</p>
      *
      * @param properties Python 실행 파일, 입력/출력 루트, 모델명 등 내부 실행 설정
-     * @param objectMapper bundle JSON에서 {@code photo_count}를 읽기 위한 JSON mapper
+     * @param objectMapper bundle JSON에서 {@code photo_count}를 읽기 위한 JSON 매퍼
      */
     @Autowired
     public LocalPhotoInfoPipelineAdapter(
@@ -69,8 +69,8 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
      * 프로젝트 식별자에 해당하는 입력 폴더를 분석하고 bundle 결과를 반환한다.
      *
      * <p>입력 경로는 {@code inputRoot/projectId}, 출력 경로는 {@code outputRoot/projectId}로 계산한다.
-     * CLI 실행이 성공하면 {@code outputRoot/projectId/bundles/bundle.json}을 읽어 사진 수와 artifact
-     * 경로를 만든다. 경로와 모델 설정은 모두 내부 configuration에서 오며 공개 API 요청에는 포함되지 않는다.</p>
+     * CLI 실행이 성공하면 {@code outputRoot/projectId/bundles/bundle.json}을 읽어 사진 수와
+     * 아티팩트 경로를 만든다. 경로와 모델 설정은 모두 내부 설정에서 오며 공개 API 요청에는 포함되지 않는다.</p>
      *
      * @param projectId 워크플로에 연결된 프로젝트 식별자
      * @return 처리 사진 수와 생성된 bundle JSON 경로
@@ -156,11 +156,11 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
     /**
      * 파이프라인이 생성한 bundle JSON을 읽어 포트 결과로 축약한다.
      *
-     * <p>현재 application 계층은 전체 bundle 본문을 직접 다루지 않는다. 큰 JSON은 artifact로 두고,
+     * <p>현재 애플리케이션 계층은 전체 bundle 본문을 직접 다루지 않는다. 큰 JSON은 아티팩트 파일로 두고,
      * 오케스트레이션 판단에 필요한 {@code photo_count}와 경로만 반환한다.</p>
      *
      * @param bundlePath 파이프라인이 생성해야 하는 bundle JSON 경로
-     * @return bundle의 사진 수와 artifact 경로
+     * @return bundle의 사진 수와 아티팩트 경로
      */
     private PhotoInfoResult readResult(Path bundlePath, Path blogPath) {
         try {

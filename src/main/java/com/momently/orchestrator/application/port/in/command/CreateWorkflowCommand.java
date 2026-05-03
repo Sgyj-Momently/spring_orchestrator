@@ -6,10 +6,15 @@ package com.momently.orchestrator.application.port.in.command;
  * @param projectId 프로젝트 식별자
  * @param groupingStrategy 그룹화 전략
  * @param timeWindowMinutes 같은 그룹으로 묶을 최대 시간 간격(분)
+ * @param voiceProfileId 적용할 말투 프로필 식별자
  */
 public record CreateWorkflowCommand(
     String projectId,
     String groupingStrategy,
-    int timeWindowMinutes
+    int timeWindowMinutes,
+    String voiceProfileId
 ) {
+    public CreateWorkflowCommand(String projectId, String groupingStrategy, int timeWindowMinutes) {
+        this(projectId, groupingStrategy, timeWindowMinutes, null);
+    }
 }

@@ -71,8 +71,17 @@ public class OutlineAgentClient implements OutlineAgentPort {
             if (responseBody == null || responseBody.isNull()) {
                 throw new IllegalStateException("Outline agent returned an empty response");
             }
-            writeOutlineResult(resultPath, responseBody);
             OutlineAgentResponse response = objectMapper.treeToValue(responseBody, OutlineAgentResponse.class);
+            String outlineStatus = response.outlineStatus() == null ? "" : response.outlineStatus().strip();
+            if (!"ok".equals(outlineStatus)) {
+                throw new IllegalStateException(
+                    "Outline agent outline_status is not ok: "
+                        + (outlineStatus.isEmpty() ? "(missing)" : outlineStatus)
+                        + ", projectId="
+                        + projectId
+                );
+            }
+            writeOutlineResult(resultPath, responseBody);
             int sectionCount = response.sectionCount();
             return new OutlineResult(sectionCount, resultPath.toString());
         } catch (IOException exception) {

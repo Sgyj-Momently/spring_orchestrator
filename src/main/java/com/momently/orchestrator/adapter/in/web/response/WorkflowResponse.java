@@ -4,35 +4,35 @@ import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.UUID;
 
 /**
- * Response payload describing a workflow resource.
+ * 워크플로 리소스를 설명하는 HTTP 응답 본문이다.
  *
- * @param workflowId workflow identifier
- * @param projectId project identifier
- * @param groupingStrategy selected grouping strategy
- * @param status current workflow status
- * @param photoCount number of public photos available for downstream steps
- * @param privacyExcludedCount number of photos excluded by the privacy safety step
- * @param averageQualityScore average quality score after photo quality scoring
- * @param groupCount number of groups produced by the grouping agent
- * @param heroPhotoCount number of selected hero photos produced by the hero photo agent
- * @param outlineSectionCount number of sections produced by the outline agent
- * @param draftSectionCount number of draft sections produced by the draft agent
- * @param styledWordCount word count after styling
- * @param reviewIssueCount number of issues found by the review agent
- * @param photoInfoBundlePath path to the generated photo information bundle artifact
- * @param privacyResultPath path to the generated privacy safety result artifact
- * @param privacyBundlePath path to the public photo bundle artifact
- * @param qualityScoreResultPath path to the generated quality score result artifact
- * @param qualityScoreBundlePath path to the scored photo bundle artifact
- * @param blogPath path to the generated blog Markdown artifact, or null when skipped
- * @param groupingResultPath path to the generated grouping result artifact
- * @param heroPhotoResultPath path to the generated hero photo selection result artifact
- * @param outlineResultPath path to the generated outline result artifact
- * @param draftResultPath path to the generated draft result artifact
- * @param styleResultPath path to the generated styled result artifact
- * @param reviewResultPath path to the generated final review artifact
- * @param lastFailedStep step name where the latest failure happened, or null
- * @param lastErrorMessage failure message for the latest failed step, or null
+ * @param workflowId 워크플로 식별자
+ * @param projectId 프로젝트 식별자
+ * @param groupingStrategy 선택한 그룹화 전략
+ * @param status 현재 워크플로 상태
+ * @param photoCount 이후 단계에 쓸 수 있는 공개 사진 수
+ * @param privacyExcludedCount 민감정보 단계에서 제외한 사진 수
+ * @param averageQualityScore 품질 점수 단계 이후 평균 품질 점수
+ * @param groupCount 그룹화 에이전트가 만든 그룹 수
+ * @param heroPhotoCount 대표 사진 에이전트가 고른 대표 사진 수
+ * @param outlineSectionCount 개요 에이전트가 만든 섹션 수
+ * @param draftSectionCount 초안 에이전트가 만든 초안 섹션 수
+ * @param styledWordCount 문체 적용 후 단어 수
+ * @param reviewIssueCount 검수 에이전트가 찾은 이슈 수
+ * @param photoInfoBundlePath 사진 정보 bundle JSON 아티팩트 경로
+ * @param privacyResultPath 민감정보 검사 결과 JSON 아티팩트 경로
+ * @param privacyBundlePath 공개용 사진 bundle JSON 아티팩트 경로
+ * @param qualityScoreResultPath 품질 점수 결과 JSON 아티팩트 경로
+ * @param qualityScoreBundlePath 점수 반영된 bundle JSON 아티팩트 경로
+ * @param blogPath 블로그 마크다운 아티팩트 경로, 생략 시 null
+ * @param groupingResultPath 그룹화 결과 JSON 아티팩트 경로
+ * @param heroPhotoResultPath 대표 사진 선택 결과 JSON 아티팩트 경로
+ * @param outlineResultPath 개요 JSON 아티팩트 경로
+ * @param draftResultPath 초안 JSON 아티팩트 경로
+ * @param styleResultPath 문체 적용 결과 JSON 아티팩트 경로
+ * @param reviewResultPath 최종 검수 JSON 아티팩트 경로
+ * @param lastFailedStep 가장 마지막 실패 단계 이름, 없으면 null
+ * @param lastErrorMessage 가장 마지막 실패 메시지, 없으면 null
  */
 public record WorkflowResponse(
     UUID workflowId,

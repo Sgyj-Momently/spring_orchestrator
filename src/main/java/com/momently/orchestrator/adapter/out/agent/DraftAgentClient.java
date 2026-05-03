@@ -57,9 +57,22 @@ public class DraftAgentClient implements DraftAgentPort {
         payload.put("photos", readField(Path.of(photoInfoResult.bundlePath()), "photos"));
 
         JsonNode body = post(payload);
+        requireDraftSemanticOk(body);
         writeResult(resultPath, body, "draft_result");
         DraftAgentResponse response = convert(body, DraftAgentResponse.class);
         return new DraftResult(response.sectionCount(), resultPath.toString());
+    }
+
+    /** 에이전트가 HTTP 200 과 함께 본문 에러를 담는 패턴을 차단한다 */
+    private static void requireDraftSemanticOk(JsonNode body) {
+        JsonNode n = body.get("draft_status");
+        if (n == null || n.isNull() || n.asText("").isBlank()) {
+            return;
+        }
+        String s = n.asText("").strip();
+        if (!"ok".equals(s)) {
+            throw new IllegalStateException("Draft agent draft_status is not ok: " + s);
+        }
     }
 
     private JsonNode post(Map<String, Object> payload) {

@@ -92,7 +92,7 @@ class WorkflowRunnerTest {
             (projectId, photoInfoResult, photoGroupingResult) -> new HeroPhotoResult(0, null),
             (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null),
             (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult) -> new DraftResult(0, null),
-            (projectId, draftResult) -> new StyleResult(0, null),
+            (projectId, draftResult, voiceProfileId) -> new StyleResult(0, null),
             (projectId, photoInfoResult, styleResult) -> new ReviewResult(0, null)
         );
 
@@ -330,7 +330,7 @@ class WorkflowRunnerTest {
                 executionLog.add("draft:%s".formatted(outlineResult.resultPath()));
                 return new DraftResult(4, "artifacts/draft/project-001/draft.json");
             },
-            (projectId, draftResult) -> {
+            (projectId, draftResult, voiceProfileId) -> {
                 executionLog.add("style:%s".formatted(draftResult.resultPath()));
                 return new StyleResult(150, "artifacts/style/project-001/styled.json");
             },

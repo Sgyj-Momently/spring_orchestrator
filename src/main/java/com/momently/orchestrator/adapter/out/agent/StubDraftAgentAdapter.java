@@ -6,6 +6,9 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -24,10 +27,35 @@ public class StubDraftAgentAdapter implements DraftAgentPort {
         HeroPhotoResult heroPhotoResult,
         OutlineResult outlineResult
     ) {
-        return new DraftResult(
-            Math.max(1, outlineResult.outlineSectionCount()),
-            "output/%s/draft/draft.json".formatted(projectId)
+        Path path = Path.of("output/%s/draft/draft.json".formatted(projectId));
+        int sectionCount = Math.max(1, outlineResult.outlineSectionCount());
+        writeJson(
+            path,
+            """
+            {
+              "artifact_type": "draft_result",
+              "project_id": "%s",
+              "section_count": %d,
+              "markdown": ""
+            }
+            """.formatted(projectId, sectionCount)
         );
+        return new DraftResult(
+            sectionCount,
+            path.toString()
+        );
+    }
+
+    private static void writeJson(Path path, String json) {
+        try {
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, json);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to write stub artifact: " + path, exception);
+        }
     }
 }
 

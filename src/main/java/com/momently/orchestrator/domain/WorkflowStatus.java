@@ -1,7 +1,7 @@
 package com.momently.orchestrator.domain;
 
 /**
- * Represents the lifecycle states of a workflow managed by the orchestrator.
+ * 오케스트레이터가 관리하는 워크플로의 생명주기 상태다.
  */
 public enum WorkflowStatus {
     CREATED,

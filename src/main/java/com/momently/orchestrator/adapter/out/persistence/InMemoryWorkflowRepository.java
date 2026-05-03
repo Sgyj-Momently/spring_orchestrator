@@ -23,13 +23,13 @@ public class InMemoryWorkflowRepository implements WorkflowRepository {
     private final Map<UUID, Workflow> storage = new ConcurrentHashMap<>();
 
     /**
-     * 워크플로 aggregate를 현재 JVM 메모리에 저장한다.
+     * 워크플로 집합체를 현재 JVM 메모리에 저장한다.
      *
-     * <p>동일한 workflow id가 이미 있으면 최신 aggregate 참조로 교체한다. 영속 저장소가 아니므로
+     * <p>같은 워크플로 식별자가 이미 있으면 최신 집합체 참조로 덮어쓴다. 영속 저장소가 아니므로
      * 재시작 후 복구나 트랜잭션 격리는 제공하지 않는다.</p>
      *
-     * @param workflow 저장할 워크플로 aggregate
-     * @return 저장된 aggregate
+     * @param workflow 저장할 워크플로 집합체
+     * @return 저장된 집합체
      */
     @Override
     public Workflow save(Workflow workflow) {

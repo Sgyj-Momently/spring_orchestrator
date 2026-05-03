@@ -139,6 +139,42 @@ class OutlineAgentClientTest {
     }
 
     @Test
+    @DisplayName("HTTP 200이라도 outline_status 가 ok 가 아니면 실패로 본다(에이전트가 LLM 예외를 본문에 담아 반환하는 경우)")
+    void rejectsOkHttpWithErrorOutlineStatus() throws IOException {
+        Path bundlePath = writeBundle("{\"photos\": []}");
+        Path groupingPath = writeGrouping("{\"groups\": []}");
+        Path heroPath = writeHero("{\"hero_photos\": []}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OutlineAgentClient client = new OutlineAgentClient(
+            new OutlineAgentProperties("http://outline.test", "/api/v1/outlines"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://outline.test/api/v1/outlines"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("""
+                {
+                  "project_id": "project-001",
+                  "outline_status": "error: ollama_request_failed (HTTP Error 404: Not Found)",
+                  "outline": null
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.createOutline(
+            "project-001",
+            new PhotoInfoResult(0, bundlePath.toString()),
+            new PhotoGroupingResult("LOCATION_BASED", 0, groupingPath.toString()),
+            new HeroPhotoResult(0, heroPath.toString())
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Outline agent outline_status is not ok")
+            .hasMessageContaining("ollama_request_failed");
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("outline 에이전트 호출 실패는 추적 가능한 예외로 감싼다")
     void wrapsOutlineAgentFailure() throws IOException {
         Path bundlePath = writeBundle("{\"photos\": []}");

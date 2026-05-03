@@ -3,6 +3,9 @@ package com.momently.orchestrator.adapter.out.agent;
 import com.momently.orchestrator.application.port.out.StyleAgentPort;
 import com.momently.orchestrator.application.port.out.result.DraftResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +17,32 @@ import org.springframework.stereotype.Component;
 public class StubStyleAgentAdapter implements StyleAgentPort {
 
     @Override
-    public StyleResult applyStyle(String projectId, DraftResult draftResult) {
-        return new StyleResult(120, "output/%s/style/styled.json".formatted(projectId));
+    public StyleResult applyStyle(String projectId, DraftResult draftResult, String voiceProfileId) {
+        Path resultPath = Path.of("output/%s/style/styled.json".formatted(projectId));
+        writeJson(
+            resultPath,
+            """
+            {
+              "artifact_type": "style_result",
+              "project_id": "%s",
+              "voice_profile_id": %s,
+              "word_count": 120,
+              "markdown": ""
+            }
+            """.formatted(projectId, voiceProfileId == null ? "null" : "\"%s\"".formatted(voiceProfileId))
+        );
+        return new StyleResult(120, resultPath.toString());
+    }
+
+    private static void writeJson(Path path, String json) {
+        try {
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, json);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to write stub artifact: " + path, exception);
+        }
     }
 }
-

@@ -25,11 +25,11 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * FastAPI 대표 사진 선택 에이전트를 HTTP로 호출하는 outbound adapter다.
+ * FastAPI 대표 사진 선택 에이전트를 HTTP로 호출하는 아웃바운드 어댑터다.
  *
- * <p>이 adapter는 {@link HeroPhotoAgentPort} 구현체로서, application 계층이 FastAPI의 URL,
- * JSON 필드, HTTP client 세부사항에 의존하지 않게 한다. {@code stub-agents} 프로필이 아닐 때
- * 활성화되며, 로컬 개발 stub 대신 실제 대표 사진 선택 서버를 호출한다.</p>
+ * <p>이 클래스는 {@link HeroPhotoAgentPort} 구현체로서, 애플리케이션 계층이 FastAPI의 URL,
+ * JSON 필드·HTTP 클라이언트 세부에 의존하지 않게 한다. {@code stub-agents} 프로필이 아닐 때
+ * 활성화되며, 로컬 개발용 대역 대신 실제 대표 사진 선택 서버를 호출한다.</p>
  */
 @Component
 @Profile("!stub-agents")

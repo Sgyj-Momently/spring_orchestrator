@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +17,7 @@ class StubPhotoGroupingAgentAdapterTest {
 
     @Test
     @DisplayName("워크플로의 그룹화 전략을 결과에 반영한다")
-    void returnsGroupingStrategyFromWorkflow() {
+    void returnsGroupingStrategyFromWorkflow() throws IOException {
         StubPhotoGroupingAgentAdapter adapter = new StubPhotoGroupingAgentAdapter();
 
         PhotoGroupingResult result = adapter.groupPhotos(
@@ -27,5 +30,12 @@ class StubPhotoGroupingAgentAdapterTest {
         assertThat(result.groupingStrategy()).isEqualTo("TIME_BASED");
         assertThat(result.groupCount()).isZero();
         assertThat(result.resultPath()).isEqualTo("artifacts/photo-grouping/project-001/grouping-result.json");
+
+        Path artifactPath = Path.of(result.resultPath());
+        assertThat(Files.exists(artifactPath)).isTrue();
+        String json = Files.readString(artifactPath);
+        assertThat(json).contains("\"grouping_strategy\": \"TIME_BASED\"");
+        assertThat(json).contains("\"time_window_minutes\": 90");
+        assertThat(json).contains("\"groups\": []");
     }
 }

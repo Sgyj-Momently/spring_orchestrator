@@ -8,7 +8,7 @@ import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 
 /**
- * ArchUnit rules proving the hexagonal architecture boundaries.
+ * 육각형 아키텍처 경계를 ArchUnit 규칙으로 검증한다.
  */
 @AnalyzeClasses(
     packages = "com.momently.orchestrator",
@@ -17,7 +17,7 @@ import com.tngtech.archunit.lang.ArchRule;
 class HexagonalArchitectureTest {
 
     /**
-     * Domain must not depend on application, adapters, or config packages.
+     * 도메인은 애플리케이션·어댑터·설정 패키지에 의존하면 안 된다.
      */
     @ArchTest
     static final ArchRule domain_must_not_depend_on_outer_layers =
@@ -27,7 +27,7 @@ class HexagonalArchitectureTest {
             .resideInAnyPackage("..application..", "..adapter..", "..config..");
 
     /**
-     * Application must not depend directly on adapter implementations.
+     * 애플리케이션은 어댑터 구현체 패키지에 직접 의존하면 안 된다.
      */
     @ArchTest
     static final ArchRule application_must_not_depend_on_adapter_implementations =

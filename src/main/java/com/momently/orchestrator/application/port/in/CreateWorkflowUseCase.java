@@ -4,15 +4,15 @@ import com.momently.orchestrator.application.port.in.command.CreateWorkflowComma
 import com.momently.orchestrator.domain.Workflow;
 
 /**
- * Use case for starting a new workflow.
+ * 새 워크플로를 시작하는 inbound 유스케이스다.
  */
 public interface CreateWorkflowUseCase {
 
     /**
-     * Creates a workflow and returns the created aggregate.
+     * 워크플로를 만들고 저장된 집합체를 반환한다.
      *
-     * @param command workflow creation command
-     * @return created workflow aggregate
+     * @param command 워크플로 생성 명령
+     * @return 생성된 워크플로 집합체
      */
     Workflow createWorkflow(CreateWorkflowCommand command);
 }

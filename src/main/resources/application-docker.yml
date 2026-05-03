@@ -1,0 +1,57 @@
+# Docker / mac-mini-shared 통합 프로필. compose 에서 SPRING_PROFILES_ACTIVE=docker,... 로 포함한다.
+
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+server:
+  port: ${SERVER_PORT:18080}
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+momently:
+  security:
+    username: ${MOMENTLY_CONSOLE_USERNAME}
+    password: ${MOMENTLY_CONSOLE_PASSWORD}
+    jwt-secret: ${MOMENTLY_JWT_SECRET}
+    jwt-expiration-seconds: ${MOMENTLY_JWT_EXPIRATION_SECONDS:86400}
+  web:
+    cors:
+      allowed-origins:
+        # 로컬 게이트(127 또는 localhost 같은 포트 공통), HTTPS 공개 URL은 아래 속성 또는 MOMENTLY_PUBLIC_ORIGIN
+        - http://127.0.0.1:${MOMENTLY_GATEWAY_PORT:18580}
+        - http://localhost:${MOMENTLY_GATEWAY_PORT:18580}
+        # Vite dev가 /api 를 게이트로 프록시할 때 브라우저 Origin(5173 등)이 그대로 전달된다
+        - http://127.0.0.1:${MOMENTLY_CONSOLE_DEV_PORT:5173}
+        - http://localhost:${MOMENTLY_CONSOLE_DEV_PORT:5173}
+        - "${MOMENTLY_PUBLIC_ORIGIN:https://momently.tpsg.co.kr}"
+
+agents:
+  photo-info:
+    pipeline:
+      python-executable: ${PHOTO_PIPELINE_PYTHON_EXECUTABLE:python3}
+      script-path: ${PHOTO_PIPELINE_SCRIPT_PATH:/workspace/photo_exif_llm_pipeline/src/run_pipeline.py}
+      input-root: ${PHOTO_PIPELINE_INPUT_ROOT:/workspace/photo_pipeline_input}
+      output-root: ${PHOTO_PIPELINE_OUTPUT_ROOT:/workspace/photo_pipeline_output}
+      ollama-base-url: ${OLLAMA_INTERNAL_URL:http://momently-ollama:11434}
+      skip-blog: true
+  photo-grouping:
+    base-url: http://momently-photo-grouping:${MOMENTLY_PORT_PHOTO_GROUPING:8000}
+  privacy-safety:
+    base-url: http://momently-privacy-safety:${MOMENTLY_PORT_PRIVACY:8700}
+  quality-score:
+    base-url: http://momently-quality-score:${MOMENTLY_PORT_QUALITY:8800}
+  hero-photo:
+    base-url: http://momently-hero-photo:${MOMENTLY_PORT_HERO:8200}
+  outline:
+    base-url: http://momently-outline:${MOMENTLY_PORT_OUTLINE:8300}
+  draft:
+    base-url: http://momently-draft:${MOMENTLY_PORT_DRAFT:8400}
+  style:
+    base-url: http://momently-style:${MOMENTLY_PORT_STYLE:8500}
+  review:
+    base-url: http://momently-review:${MOMENTLY_PORT_REVIEW:8600}

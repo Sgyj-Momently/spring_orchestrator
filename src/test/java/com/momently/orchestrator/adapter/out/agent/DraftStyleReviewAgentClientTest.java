@@ -113,7 +113,7 @@ class DraftStyleReviewAgentClientTest {
                 }
                 """, MediaType.APPLICATION_JSON));
 
-        StyleResult result = client.applyStyle("project-001", new DraftResult(1, draft.toString()));
+        StyleResult result = client.applyStyle("project-001", new DraftResult(1, draft.toString()), null);
 
         assertThat(result.wordCount()).isEqualTo(4);
         assertThat(result.resultPath()).isEqualTo(tempDir.resolve("output/style/styled.json").toString());
@@ -243,8 +243,114 @@ class DraftStyleReviewAgentClientTest {
         server.expect(requestTo("http://style.test/api/v1/styles"))
             .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> client.applyStyle("project-001", new DraftResult(1, draft.toString())))
+        assertThatThrownBy(() -> client.applyStyle("project-001", new DraftResult(1, draft.toString()), null))
             .isInstanceOf(IllegalStateException.class);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("HTTP 200 이라도 draft_status 가 ok 가 아니면 실패로 본다")
+    void rejectsDraftOkHttpWithErrorStatus() throws IOException {
+        Path bundle = write("output/bundles/bundle.json", "{\"photos\":[]}");
+        Path grouping = write("output/grouping/grouping-result.json", "{\"groups\":[]}");
+        Path hero = write("output/hero-photo/hero-result.json", "{\"hero_photos\":[]}");
+        Path outline = write("output/outline/outline.json", "{\"outline\":{\"sections\":[]}}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        DraftAgentClient client = new DraftAgentClient(
+            new DraftAgentProperties("http://draft.test", "/api/v1/drafts"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://draft.test/api/v1/drafts"))
+            .andRespond(withSuccess(
+                "{\"draft_status\":\"error: llm_failed\",\"section_count\":0,\"markdown\":\"\"}",
+                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.createDraft(
+            "project-001",
+            new PhotoInfoResult(0, bundle.toString()),
+            new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
+            new HeroPhotoResult(0, hero.toString()),
+            new OutlineResult(0, outline.toString())
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("draft_status is not ok");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("HTTP 200 이라도 style_status 가 ok 로 시작하지 않으면 실패로 본다")
+    void rejectsStyleOkHttpWithErrorStatus() throws IOException {
+        Path draft = write("output/draft/draft.json", "{\"markdown\":\"# Trip\"}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        StyleAgentClient client = new StyleAgentClient(
+            new StyleAgentProperties("http://style.test", "/api/v1/styles"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://style.test/api/v1/styles"))
+            .andRespond(withSuccess(
+                "{\"style_status\":\"error: ollama down\",\"word_count\":1,\"markdown\":\"#\"}",
+                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.applyStyle("project-001", new DraftResult(1, draft.toString()), null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("style_status");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("HTTP 200 이라도 알 수 없는 review_status 면 실패로 본다")
+    void rejectsReviewOkHttpWithUnknownStatus() throws IOException {
+        Path bundle = write("output/bundles/bundle.json", "{\"photos\":[]}");
+        Path style = write("output/style/styled.json", "{\"markdown\":\"# Trip\\n\\nBody text ok\"}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ReviewAgentClient client = new ReviewAgentClient(
+            new ReviewAgentProperties("http://review.test", "/api/v1/reviews"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://review.test/api/v1/reviews"))
+            .andRespond(withSuccess(
+                "{\"review_status\":\"failed\",\"issue_count\":0,\"final_markdown\":\"# Trip\"}",
+                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.reviewDocument(
+            "project-001",
+            new PhotoInfoResult(0, bundle.toString()),
+            new StyleResult(2, style.toString())
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("review_status is unexpected");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("needs_attention 검수 결과는 허용한다")
+    void allowsReviewNeedsAttention() throws IOException {
+        Path bundle = write("output/bundles/bundle.json", "{\"photos\":[]}");
+        Path style = write("output/style/styled.json", "{\"markdown\":\"# Trip\\n\\nBody text ok\"}");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ReviewAgentClient client = new ReviewAgentClient(
+            new ReviewAgentProperties("http://review.test", "/api/v1/reviews"),
+            new ObjectMapper(),
+            builder
+        );
+        server.expect(requestTo("http://review.test/api/v1/reviews"))
+            .andRespond(withSuccess(
+                "{\"review_status\":\"needs_attention\",\"issue_count\":2,\"final_markdown\":\"# Trip\"}",
+                MediaType.APPLICATION_JSON));
+
+        ReviewResult result = client.reviewDocument(
+            "project-001",
+            new PhotoInfoResult(0, bundle.toString()),
+            new StyleResult(2, style.toString())
+        );
+        assertThat(result.issueCount()).isEqualTo(2);
         server.verify();
     }
 
@@ -263,7 +369,7 @@ class DraftStyleReviewAgentClientTest {
             .andExpect(method(HttpMethod.POST))
             .andRespond(withServerError().body("{\"error\":\"down\"}").contentType(MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> client.applyStyle("project-001", new DraftResult(1, draft.toString())))
+        assertThatThrownBy(() -> client.applyStyle("project-001", new DraftResult(1, draft.toString()), null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Style agent call failed")
             .hasMessageContaining("status=500")
@@ -379,7 +485,7 @@ class DraftStyleReviewAgentClientTest {
             new StyleAgentProperties("http://style.test", "/api/v1/styles"),
             objectMapper,
             RestClient.builder()
-        ).applyStyle("project-001", new DraftResult(0, tempDir.resolve("missing-draft.json").toString())))
+        ).applyStyle("project-001", new DraftResult(0, tempDir.resolve("missing-draft.json").toString()), null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Failed to read json artifact");
 

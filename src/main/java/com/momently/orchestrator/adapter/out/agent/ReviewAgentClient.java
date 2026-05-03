@@ -49,9 +49,21 @@ public class ReviewAgentClient implements ReviewAgentPort {
         payload.put("excluded_photos", arrayOrEmpty(bundle.path("excluded_photos")));
 
         JsonNode body = post(payload);
+        requireReviewSemanticOk(body);
         writeResult(resultPath, body, "review_result");
         ReviewAgentResponse response = convert(body, ReviewAgentResponse.class);
         return new ReviewResult(response.issueCount(), resultPath.toString());
+    }
+
+    private static void requireReviewSemanticOk(JsonNode body) {
+        JsonNode n = body.get("review_status");
+        if (n == null || n.isNull() || n.asText("").isBlank()) {
+            return;
+        }
+        String s = n.asText("").strip();
+        if (!"ok".equals(s) && !"needs_attention".equals(s)) {
+            throw new IllegalStateException("Review agent review_status is unexpected: " + s);
+        }
     }
 
     private JsonNode post(Map<String, Object> payload) {

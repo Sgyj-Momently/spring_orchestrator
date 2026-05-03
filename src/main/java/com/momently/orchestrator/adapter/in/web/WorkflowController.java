@@ -18,7 +18,6 @@ import java.util.UUID;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,11 +26,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Inbound web adapter exposing workflow APIs.
+ * 워크플로 REST API를 노출하는 웹 인바운드 어댑터
  */
 @RestController
 @RequestMapping("/api/v1/workflows")
-@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class WorkflowController {
 
     private final CreateWorkflowUseCase createWorkflowUseCase;
@@ -40,11 +38,11 @@ public class WorkflowController {
     private final ObjectMapper objectMapper;
 
     /**
-     * Creates the workflow controller.
+     * 워크플로 컨트롤러를 생성한다.
      *
-     * @param createWorkflowUseCase workflow creation use case
-     * @param getWorkflowUseCase workflow lookup use case
-     * @param runWorkflowUseCase workflow execution use case
+     * @param createWorkflowUseCase 워크플로 생성 유스케이스
+     * @param getWorkflowUseCase 워크플로 조회 유스케이스
+     * @param runWorkflowUseCase 워크플로 실행 유스케이스
      */
     public WorkflowController(
         CreateWorkflowUseCase createWorkflowUseCase,
@@ -59,26 +57,31 @@ public class WorkflowController {
     }
 
     /**
-     * Creates a new workflow resource.
+     * 새 워크플로 리소스를 생성한다.
      *
-     * @param request workflow creation request
-     * @return created workflow response with HATEOAS links
+     * @param request 워크플로 생성 요청 본문
+     * @return HATEOAS 링크가 포함된 생성된 워크플로 응답
      */
     @PostMapping
     public ResponseEntity<EntityModel<WorkflowResponse>> createWorkflow(
         @Valid @RequestBody CreateWorkflowRequest request
     ) {
         Workflow workflow = createWorkflowUseCase.createWorkflow(
-            new CreateWorkflowCommand(request.projectId(), request.groupingStrategy(), request.resolvedTimeWindowMinutes())
+            new CreateWorkflowCommand(
+                request.projectId(),
+                request.groupingStrategy(),
+                request.resolvedTimeWindowMinutes(),
+                request.voiceProfileId()
+            )
         );
         return ResponseEntity.ok(toModel(workflow));
     }
 
     /**
-     * Retrieves a workflow resource.
+     * 워크플로 리소스를 조회한다.
      *
-     * @param workflowId workflow identifier
-     * @return workflow response with HATEOAS links
+     * @param workflowId 워크플로 식별자
+     * @return HATEOAS 링크가 포함된 워크플로 응답
      */
     @GetMapping("/{workflowId}")
     public ResponseEntity<EntityModel<WorkflowResponse>> getWorkflow(@PathVariable UUID workflowId) {
@@ -91,8 +94,8 @@ public class WorkflowController {
      *
      * <p>실행 결과는 Location 헤더가 가리키는 GET 엔드포인트로 상태를 폴링해 확인한다.</p>
      *
-     * @param workflowId workflow identifier
-     * @return 202 Accepted with Location header pointing to the workflow status endpoint
+     * @param workflowId 워크플로 식별자
+     * @return Location 헤더에 워크플로 상태 조회 URL이 담긴 202 Accepted
      */
     @PostMapping("/{workflowId}/run")
     public ResponseEntity<Void> runWorkflow(@PathVariable UUID workflowId) {
@@ -105,11 +108,11 @@ public class WorkflowController {
     }
 
     /**
-     * Returns a workflow artifact content for the console UI.
+     * 콘솔 UI용 워크플로 아티팩트 본문을 반환한다.
      *
-     * @param workflowId workflow identifier
-     * @param artifactType artifact type such as bundle, grouping, hero, outline, draft, style, review, or blog
-     * @return artifact content
+     * @param workflowId 워크플로 식별자
+     * @param artifactType 아티팩트 유형 (예: bundle, grouping, hero, outline, draft, style, review, blog 등)
+     * @return 아티팩트 내용
      */
     @GetMapping("/{workflowId}/artifacts/{artifactType}")
     public ResponseEntity<WorkflowArtifactResponse> getArtifact(
