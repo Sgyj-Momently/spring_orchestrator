@@ -15,3 +15,8 @@ hs_err_pid*
 
 # Logs
 *.log
+
+# Local tool / runtime output
+.omc/
+artifacts/
+output/
