@@ -45,6 +45,10 @@ agents:
       vision-model: qwen2.5vl:7b
       writer-model: qwen2.5:14b
       ollama-timeout-seconds: 180
+      ffmpeg-command: ffmpeg
+      video-frame-second: 1.0
+      video-frame-count: 3
+      video-frame-interval-seconds: 4.0
       skip-blog: true
   photo-grouping:
     base-url: http://127.0.0.1:8000

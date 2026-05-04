@@ -358,5 +358,15 @@ class WorkflowRunnerTest {
         public Optional<Workflow> findById(UUID workflowId) {
             return Optional.ofNullable(storage.get(workflowId));
         }
+
+        @Override
+        public List<Workflow> findAll() {
+            return List.copyOf(storage.values());
+        }
+
+        @Override
+        public void deleteAll() {
+            storage.clear();
+        }
     }
 }

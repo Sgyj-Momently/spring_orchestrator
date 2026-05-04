@@ -36,7 +36,7 @@ class PhotoUploadControllerExceptionTest {
     @Test
     @DisplayName("IllegalStateException은 503과 본문 메시지로 매핑된다")
     void mapsIllegalStateToServiceUnavailable() throws Exception {
-        when(photoUploadService.saveUploadedImages(anyList()))
+        when(photoUploadService.saveUploadedMedia(anyList()))
             .thenThrow(new IllegalStateException("입력 루트 없음"));
 
         MockMultipartFile part = new MockMultipartFile(
@@ -46,7 +46,7 @@ class PhotoUploadControllerExceptionTest {
             new byte[] {1}
         );
 
-        mockMvc.perform(multipart("/api/v1/uploads/images").file(part))
+        mockMvc.perform(multipart("/api/v1/uploads/media").file(part))
             .andExpect(status().is(HttpStatus.SERVICE_UNAVAILABLE.value()))
             .andExpect(jsonPath("$.error").value("입력 루트 없음"));
     }

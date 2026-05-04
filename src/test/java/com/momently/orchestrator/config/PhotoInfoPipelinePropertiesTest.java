@@ -34,6 +34,10 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.visionModel()).isEqualTo("qwen2.5vl:7b");
         assertThat(properties.writerModel()).isEqualTo("qwen2.5:14b");
         assertThat(properties.ollamaTimeoutSeconds()).isEqualTo(180);
+        assertThat(properties.ffmpegCommand()).isEqualTo("ffmpeg");
+        assertThat(properties.videoFrameSecond()).isEqualTo(1.0);
+        assertThat(properties.videoFrameCount()).isEqualTo(3);
+        assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(4.0);
         assertThat(properties.skipBlog()).isTrue();
         assertThat(properties.force()).isFalse();
     }
@@ -50,6 +54,10 @@ class PhotoInfoPipelinePropertiesTest {
             "qwen2.5vl:7b",
             "gemma4",
             60,
+            "/usr/bin/ffmpeg",
+            2.5,
+            5,
+            6.5,
             false,
             true
         );
@@ -62,6 +70,10 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.visionModel()).isEqualTo("qwen2.5vl:7b");
         assertThat(properties.writerModel()).isEqualTo("gemma4");
         assertThat(properties.ollamaTimeoutSeconds()).isEqualTo(60);
+        assertThat(properties.ffmpegCommand()).isEqualTo("/usr/bin/ffmpeg");
+        assertThat(properties.videoFrameSecond()).isEqualTo(2.5);
+        assertThat(properties.videoFrameCount()).isEqualTo(5);
+        assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(6.5);
         assertThat(properties.skipBlog()).isFalse();
         assertThat(properties.force()).isTrue();
     }

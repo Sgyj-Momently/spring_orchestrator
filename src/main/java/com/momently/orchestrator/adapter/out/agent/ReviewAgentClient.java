@@ -61,7 +61,7 @@ public class ReviewAgentClient implements ReviewAgentPort {
             return;
         }
         String s = n.asText("").strip();
-        if (!"ok".equals(s) && !"needs_attention".equals(s)) {
+        if (!"ok".equals(s) && !"ok_polished".equals(s) && !"needs_attention".equals(s)) {
             throw new IllegalStateException("Review agent review_status is unexpected: " + s);
         }
     }

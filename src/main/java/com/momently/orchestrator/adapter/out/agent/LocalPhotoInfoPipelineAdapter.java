@@ -144,6 +144,14 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         command.add(properties.writerModel());
         command.add("--ollama-timeout-seconds");
         command.add(String.valueOf(properties.ollamaTimeoutSeconds()));
+        command.add("--ffmpeg-command");
+        command.add(properties.ffmpegCommand());
+        command.add("--video-frame-second");
+        command.add(String.valueOf(properties.videoFrameSecond()));
+        command.add("--video-frame-count");
+        command.add(String.valueOf(properties.videoFrameCount()));
+        command.add("--video-frame-interval-seconds");
+        command.add(String.valueOf(properties.videoFrameIntervalSeconds()));
         if (properties.skipBlog()) {
             command.add("--skip-blog");
         }

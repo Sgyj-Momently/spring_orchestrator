@@ -1,11 +1,11 @@
 spring:
   datasource:
-    url: jdbc:postgresql://127.0.0.1:5432/momently
-    username: momently
-    password: change-me
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/momently}
+    username: ${SPRING_DATASOURCE_USERNAME:momently}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     open-in-view: false
     properties:
       hibernate:

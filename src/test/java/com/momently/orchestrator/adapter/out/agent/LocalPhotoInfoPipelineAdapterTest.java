@@ -56,6 +56,14 @@ class LocalPhotoInfoPipelineAdapterTest {
             "gemma4",
             "--ollama-timeout-seconds",
             "60",
+            "--ffmpeg-command",
+            "ffmpeg",
+            "--video-frame-second",
+            "1.0",
+            "--video-frame-count",
+            "3",
+            "--video-frame-interval-seconds",
+            "4.0",
             "--skip-blog"
         );
         assertThat(result.photoCount()).isEqualTo(7);

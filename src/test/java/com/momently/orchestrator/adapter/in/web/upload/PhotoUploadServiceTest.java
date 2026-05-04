@@ -106,6 +106,28 @@ class PhotoUploadServiceTest {
     }
 
     @Test
+    @DisplayName("유효한 MP4 헤더를 가진 동영상도 새 프로젝트 폴더에 저장한다")
+    void savesMp4IntoNewProjectDirectory() throws Exception {
+        Path inputRoot = Files.createDirectories(uploadRoot.resolve("in-mp4"));
+        PhotoUploadService service = newPhotoUploadService(inputRoot.toString());
+
+        byte[] mp4 = fakeIsoBmff("isom");
+        MockMultipartFile part = new MockMultipartFile(
+            "files",
+            "clip.mp4",
+            "video/mp4",
+            mp4
+        );
+
+        PhotoUploadResponse response = service.saveUploadedMedia(java.util.List.of(part));
+
+        assertThat(response.savedCount()).isEqualTo(1);
+        assertThat(response.projectId()).startsWith("u_");
+        assertThat(inputRoot.resolve(response.projectId()).resolve("0001.mp4")).exists();
+        assertThat(response.bytesTotal()).isEqualTo(mp4.length);
+    }
+
+    @Test
     @DisplayName("실제 바이트가 PNG인데 확장자만 JPG이면 헤더 검증에서 거절한다")
     void rejectsMismatchedExtensionAndContent() throws Exception {
         Path inputRoot = Files.createDirectories(uploadRoot.resolve("in2"));
@@ -124,7 +146,79 @@ class PhotoUploadServiceTest {
             .hasMessageContaining("형식과 맞지 않");
     }
 
+    @Test
+    @DisplayName("빈 업로드 요청은 거절한다")
+    void rejectsEmptyUpload() throws Exception {
+        Path inputRoot = Files.createDirectories(uploadRoot.resolve("in-empty"));
+        PhotoUploadService service = newPhotoUploadService(inputRoot.toString());
+
+        assertThatThrownBy(() -> service.saveUploadedMedia(java.util.List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("업로드할 사진 또는 동영상 파일이 없습니다");
+    }
+
+    @Test
+    @DisplayName("파일 개수 제한을 넘으면 저장 전에 거절한다")
+    void rejectsTooManyFiles() throws Exception {
+        Path inputRoot = Files.createDirectories(uploadRoot.resolve("in-too-many"));
+        PhotoUploadService service = newPhotoUploadService(
+            inputRoot.toString(),
+            new MomentlyUploadProperties(1, 2_000_000, 12_000_000)
+        );
+
+        MockMultipartFile a = new MockMultipartFile("files", "a.mp4", "video/mp4", fakeIsoBmff("isom"));
+        MockMultipartFile b = new MockMultipartFile("files", "b.mp4", "video/mp4", fakeIsoBmff("isom"));
+
+        assertThatThrownBy(() -> service.saveUploadedMedia(java.util.List.of(a, b)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("최대 1개");
+    }
+
+    @Test
+    @DisplayName("전체 용량 제한을 넘으면 저장 전에 거절한다")
+    void rejectsDeclaredTotalOverLimit() throws Exception {
+        Path inputRoot = Files.createDirectories(uploadRoot.resolve("in-total-limit"));
+        PhotoUploadService service = newPhotoUploadService(
+            inputRoot.toString(),
+            new MomentlyUploadProperties(10, 2_000_000, 10)
+        );
+        MockMultipartFile part = new MockMultipartFile("files", "clip.mp4", "video/mp4", fakeIsoBmff("isom"));
+
+        assertThatThrownBy(() -> service.saveUploadedMedia(java.util.List.of(part)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("전체 업로드 용량 한도");
+    }
+
+    @Test
+    @DisplayName("입력 루트가 없으면 서비스 오류로 거절한다")
+    void rejectsMissingInputRoot() {
+        PhotoUploadService service = newPhotoUploadService(uploadRoot.resolve("missing-root").toString());
+        MockMultipartFile part = new MockMultipartFile("files", "clip.mp4", "video/mp4", fakeIsoBmff("isom"));
+
+        assertThatThrownBy(() -> service.saveUploadedMedia(java.util.List.of(part)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("미디어 입력 루트가 존재하지 않습니다");
+    }
+
+    @Test
+    @DisplayName("확장자가 없어도 동영상 MIME으로 저장 확장자를 결정한다")
+    void usesVideoMimeTypeWhenExtensionIsMissing() throws Exception {
+        Path inputRoot = Files.createDirectories(uploadRoot.resolve("in-video-mime"));
+        PhotoUploadService service = newPhotoUploadService(inputRoot.toString());
+        MockMultipartFile mov = new MockMultipartFile("files", "clip", "video/quicktime", fakeIsoBmff("qt  "));
+        MockMultipartFile m4v = new MockMultipartFile("files", "clip2", "video/x-m4v", fakeIsoBmff("M4V "));
+
+        PhotoUploadResponse response = service.saveUploadedMedia(java.util.List.of(mov, m4v));
+
+        assertThat(inputRoot.resolve(response.projectId()).resolve("0001.mov")).exists();
+        assertThat(inputRoot.resolve(response.projectId()).resolve("0002.m4v")).exists();
+    }
+
     private PhotoUploadService newPhotoUploadService(String inputRoot) {
+        return newPhotoUploadService(inputRoot, new MomentlyUploadProperties(10, 2_000_000, 12_000_000));
+    }
+
+    private PhotoUploadService newPhotoUploadService(String inputRoot, MomentlyUploadProperties limits) {
         PhotoInfoPipelineProperties pipeline = new PhotoInfoPipelineProperties(
             "python3",
             "../photo_exif_llm_pipeline/src/run_pipeline.py",
@@ -137,7 +231,6 @@ class PhotoUploadServiceTest {
             true,
             false
         );
-        MomentlyUploadProperties limits = new MomentlyUploadProperties(10, 2_000_000, 12_000_000);
         return new PhotoUploadService(pipeline, limits);
     }
 
@@ -146,5 +239,20 @@ class PhotoUploadServiceTest {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         ImageIO.write(image, "png", buffer);
         return buffer.toByteArray();
+    }
+
+    private static byte[] fakeIsoBmff(String brand) {
+        byte[] bytes = new byte[24];
+        bytes[0] = 0x00;
+        bytes[1] = 0x00;
+        bytes[2] = 0x00;
+        bytes[3] = 0x18;
+        bytes[4] = 'f';
+        bytes[5] = 't';
+        bytes[6] = 'y';
+        bytes[7] = 'p';
+        byte[] brandBytes = brand.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        System.arraycopy(brandBytes, 0, bytes, 8, Math.min(4, brandBytes.length));
+        return bytes;
     }
 }

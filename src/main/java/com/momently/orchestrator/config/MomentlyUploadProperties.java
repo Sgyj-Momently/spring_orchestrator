@@ -3,7 +3,7 @@ package com.momently.orchestrator.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 콘솔에서 여러 장의 사진을 업로드할 때 사용하는 제한 값이다.
+ * 콘솔에서 여러 미디어 파일을 업로드할 때 사용하는 제한 값이다.
  *
  * <p>실제 저장 위치는 항상 {@code agents.photo-info.pipeline.input-root} 하위의
  * 서버가 발급한 전용 디렉터리로만 한정한다.</p>

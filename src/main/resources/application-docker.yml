@@ -4,6 +4,18 @@ spring:
   config:
     activate:
       on-profile: docker
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://momently-postgres:5432/momently}
+    username: ${SPRING_DATASOURCE_USERNAME:momently}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
 server:
   port: ${SERVER_PORT:18080}
@@ -38,6 +50,10 @@ agents:
       input-root: ${PHOTO_PIPELINE_INPUT_ROOT:/workspace/photo_pipeline_input}
       output-root: ${PHOTO_PIPELINE_OUTPUT_ROOT:/workspace/photo_pipeline_output}
       ollama-base-url: ${OLLAMA_INTERNAL_URL:http://momently-ollama:11434}
+      ffmpeg-command: ${PHOTO_PIPELINE_FFMPEG_COMMAND:ffmpeg}
+      video-frame-second: ${PHOTO_PIPELINE_VIDEO_FRAME_SECOND:1.0}
+      video-frame-count: ${PHOTO_PIPELINE_VIDEO_FRAME_COUNT:3}
+      video-frame-interval-seconds: ${PHOTO_PIPELINE_VIDEO_FRAME_INTERVAL_SECONDS:4.0}
       skip-blog: true
   photo-grouping:
     base-url: http://momently-photo-grouping:${MOMENTLY_PORT_PHOTO_GROUPING:8000}

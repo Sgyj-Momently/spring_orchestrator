@@ -29,6 +29,10 @@ class PhotoInfoPipelinePropertiesBindingTest {
                 "agents.photo-info.pipeline.vision-model=qwen2.5vl:7b",
                 "agents.photo-info.pipeline.writer-model=gemma4",
                 "agents.photo-info.pipeline.ollama-timeout-seconds=60",
+                "agents.photo-info.pipeline.ffmpeg-command=/usr/bin/ffmpeg",
+                "agents.photo-info.pipeline.video-frame-second=2.5",
+                "agents.photo-info.pipeline.video-frame-count=4",
+                "agents.photo-info.pipeline.video-frame-interval-seconds=3.5",
                 "agents.photo-info.pipeline.skip-blog=false"
             )
             .run(context -> {
@@ -45,6 +49,10 @@ class PhotoInfoPipelinePropertiesBindingTest {
                 assertThat(properties.visionModel()).isEqualTo("qwen2.5vl:7b");
                 assertThat(properties.writerModel()).isEqualTo("gemma4");
                 assertThat(properties.ollamaTimeoutSeconds()).isEqualTo(60);
+                assertThat(properties.ffmpegCommand()).isEqualTo("/usr/bin/ffmpeg");
+                assertThat(properties.videoFrameSecond()).isEqualTo(2.5);
+                assertThat(properties.videoFrameCount()).isEqualTo(4);
+                assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(3.5);
                 assertThat(properties.skipBlog()).isFalse();
             });
     }

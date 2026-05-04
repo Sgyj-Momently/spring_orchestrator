@@ -7,6 +7,7 @@ import com.momently.orchestrator.application.port.in.command.CreateWorkflowComma
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -50,6 +51,16 @@ public class WorkflowService implements CreateWorkflowUseCase, GetWorkflowUseCas
     public Workflow getWorkflow(UUID workflowId) {
         return workflowRepository.findById(workflowId)
             .orElseThrow(() -> new IllegalArgumentException("Workflow not found: " + workflowId));
+    }
+
+    @Override
+    public List<Workflow> listWorkflows() {
+        return workflowRepository.findAll();
+    }
+
+    @Override
+    public void deleteAllWorkflows() {
+        workflowRepository.deleteAll();
     }
 
     @Override

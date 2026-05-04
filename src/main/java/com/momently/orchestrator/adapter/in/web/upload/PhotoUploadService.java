@@ -19,19 +19,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 멀티파트 이미지를 파이프라인 입력 디렉터리로만 옮긴다.
+ * 멀티파트 사진과 동영상을 파이프라인 입력 디렉터리로만 옮긴다.
  *
  * <p>원본 파일명은 무시하고 안전한 순번 파일명만 쓴다. 경로는 항상 설정된 input-root 이하의
  * 서버가 새로 만든 하위 폴더로 제한한다.</p>
  *
  * <p>확장자·MIME은 조작 가능하므로, 저장 후 헤더(매직) 검사에 더해 JPG/PNG는
  * {@link ImageIO} 한 장 디코드를 시도해 실제 비트맵 여부까지 확인한다. WEBP·HEIC 등은 표준 실행 환경에
- * 디코더가 없을 수 있어 헤더 검증 단계까지로 둔다.</p>
+ * 디코더가 없을 수 있어 헤더 검증 단계까지로 둔다. MP4/MOV/M4V는 ISO BMFF {@code ftyp} 헤더를 확인한다.</p>
  */
 @Service
 public class PhotoUploadService {
 
-    private static final Set<String> ALLOWED_EXT = Set.of("jpg", "jpeg", "png", "heic", "heif", "webp");
+    private static final Set<String> ALLOWED_EXT = Set.of(
+        "jpg",
+        "jpeg",
+        "png",
+        "heic",
+        "heif",
+        "webp",
+        "mp4",
+        "mov",
+        "m4v"
+    );
 
     private final PhotoInfoPipelineProperties pipelineProperties;
     private final MomentlyUploadProperties uploadProperties;
@@ -45,14 +55,14 @@ public class PhotoUploadService {
     }
 
     /**
-     * 새 프로젝트 폴더를 만들고 업로드된 이미지를 저장한다.
+     * 새 프로젝트 폴더를 만들고 업로드된 미디어 파일을 저장한다.
      *
      * @return 새 {@code projectId}(폴더 이름)
      * @throws IllegalArgumentException 검증 실패 또는 스트림 오류 시
      */
-    public PhotoUploadResponse saveUploadedImages(List<MultipartFile> files) {
+    public PhotoUploadResponse saveUploadedMedia(List<MultipartFile> files) {
         if (files == null || files.stream().noneMatch(file -> file != null && !file.isEmpty())) {
-            throw new IllegalArgumentException("업로드할 이미지 파일이 없습니다.");
+            throw new IllegalArgumentException("업로드할 사진 또는 동영상 파일이 없습니다.");
         }
 
         List<MultipartFile> nonEmpty = files.stream()
@@ -61,7 +71,7 @@ public class PhotoUploadService {
 
         if (nonEmpty.size() > uploadProperties.maxFiles()) {
             throw new IllegalArgumentException(
-                "한 번에 올릴 수 있는 장 수는 최대 " + uploadProperties.maxFiles() + "장입니다."
+                "한 번에 올릴 수 있는 파일 수는 최대 " + uploadProperties.maxFiles() + "개입니다."
             );
         }
 
@@ -74,7 +84,7 @@ public class PhotoUploadService {
 
         Path base = Path.of(pipelineProperties.inputRoot()).toAbsolutePath().normalize();
         if (!Files.isDirectory(base)) {
-            throw new IllegalStateException("사진 입력 루트가 존재하지 않습니다: " + base);
+            throw new IllegalStateException("미디어 입력 루트가 존재하지 않습니다: " + base);
         }
 
         String projectId = "u_" + UUID.randomUUID().toString().replace("-", "");
@@ -99,7 +109,7 @@ public class PhotoUploadService {
                     throw new IllegalArgumentException((i + 1) + "번째 파일은 지원하지 않는 형식입니다.");
                 }
                 if (part.getSize() > uploadProperties.maxBytesPerFile()) {
-                    throw new IllegalArgumentException((i + 1) + "번째 파일이 한 장당 용량 한도를 넘습니다.");
+                    throw new IllegalArgumentException((i + 1) + "번째 파일이 파일당 용량 한도를 넘습니다.");
                 }
 
                 String fileName = String.format(Locale.US, "%04d.%s", i + 1, ext);
@@ -120,7 +130,7 @@ public class PhotoUploadService {
                     header = prefix <= 0 ? new byte[0] : headerIn.readNBytes(prefix);
                 }
                 if (!validateMagicBytes(header, ext)) {
-                    throw new IllegalArgumentException((i + 1) + "번째 파일 내용이 이미지 형식과 맞지 않습니다.");
+                    throw new IllegalArgumentException((i + 1) + "번째 파일 내용이 확장자 형식과 맞지 않습니다.");
                 }
                 verifyDecodableBitmap(dest, ext, i + 1);
             }
@@ -133,6 +143,16 @@ public class PhotoUploadService {
         }
 
         return new PhotoUploadResponse(projectId, nonEmpty.size(), bytesTotal);
+    }
+
+    /**
+     * 기존 테스트와 클라이언트 호환을 위한 이미지 업로드 이름이다.
+     *
+     * <p>현재는 이미지와 동영상을 같은 프로젝트 입력 폴더에 저장하므로 새 코드는
+     * {@link #saveUploadedMedia(List)}를 사용한다.</p>
+     */
+    public PhotoUploadResponse saveUploadedImages(List<MultipartFile> files) {
+        return saveUploadedMedia(files);
     }
 
     private static long transferLimited(InputStream inputStream, Path dest, long maxBytes) throws IOException {
@@ -175,6 +195,9 @@ public class PhotoUploadService {
                 case "image/png" -> "png";
                 case "image/webp" -> "webp";
                 case "image/heic", "image/heif" -> "heic";
+                case "video/mp4", "application/mp4" -> "mp4";
+                case "video/quicktime" -> "mov";
+                case "video/x-m4v" -> "m4v";
                 default -> "";
             };
         }
@@ -219,6 +242,7 @@ public class PhotoUploadService {
                 && header[10] == 'B'
                 && header[11] == 'P';
             case "heic" -> header.length >= 12 && isFtypIsoBmff(header);
+            case "mp4", "mov", "m4v" -> header.length >= 12 && isFtypIsoBmff(header);
             default -> false;
         };
     }

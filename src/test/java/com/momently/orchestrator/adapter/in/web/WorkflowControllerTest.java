@@ -1,7 +1,9 @@
 package com.momently.orchestrator.adapter.in.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -11,9 +13,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.GetWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
+import com.momently.orchestrator.application.port.out.ReviewAgentPort;
+import com.momently.orchestrator.application.port.out.StyleAgentPort;
+import com.momently.orchestrator.application.port.out.WorkflowRepository;
+import com.momently.orchestrator.application.port.out.result.ReviewResult;
+import com.momently.orchestrator.application.port.out.result.StyleResult;
+import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.security.JwtService;
 import com.momently.orchestrator.domain.WorkflowStatus;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +60,18 @@ class WorkflowControllerTest {
     /** 슬라이스에 보안 빈 체인이 올라가므로 JwtService만 모의로 채운다. */
     @MockBean
     private JwtService jwtService;
+
+    @MockBean
+    private PhotoInfoPipelineProperties photoInfoPipelineProperties;
+
+    @MockBean
+    private StyleAgentPort styleAgentPort;
+
+    @MockBean
+    private ReviewAgentPort reviewAgentPort;
+
+    @MockBean
+    private WorkflowRepository workflowRepository;
 
     @TempDir
     Path tempDir;
@@ -123,6 +144,35 @@ class WorkflowControllerTest {
     }
 
     @Test
+    @DisplayName("워크플로 목록을 서버 기록으로 조회한다")
+    void listsWorkflows() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f19");
+        Workflow workflow = new Workflow(
+            workflowId,
+            "project-history",
+            "LOCATION_BASED",
+            90,
+            WorkflowStatus.COMPLETED
+        );
+        when(getWorkflowUseCase.listWorkflows()).thenReturn(List.of(workflow));
+
+        mockMvc.perform(get("/api/v1/workflows"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].workflowId").value(workflowId.toString()))
+            .andExpect(jsonPath("$[0].projectId").value("project-history"))
+            .andExpect(jsonPath("$[0].status").value("COMPLETED"));
+    }
+
+    @Test
+    @DisplayName("워크플로 기록을 모두 삭제한다")
+    void deletesWorkflowHistory() throws Exception {
+        mockMvc.perform(delete("/api/v1/workflows"))
+            .andExpect(status().isNoContent());
+
+        verify(getWorkflowUseCase).deleteAllWorkflows();
+    }
+
+    @Test
     @DisplayName("워크플로 실행 요청을 받아 202 Accepted와 상태 조회용 Location 헤더를 반환한다")
     void runsWorkflow() throws Exception {
         UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f12");
@@ -130,6 +180,34 @@ class WorkflowControllerTest {
         mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
             .andExpect(status().isAccepted())
             .andExpect(header().exists("Location"));
+    }
+
+    @Test
+    @DisplayName("완료된 워크플로는 기존 초안으로 문체를 다시 적용하고 검수한다")
+    void restylesCompletedWorkflow() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f38");
+        Path draftPath = tempDir.resolve("draft.json");
+        Path stylePath = tempDir.resolve("style.json");
+        Path reviewPath = tempDir.resolve("review.json");
+        Files.writeString(draftPath, "{\"section_count\":2}");
+        Files.writeString(stylePath, "{\"style_status\":\"ok\"}");
+        Files.writeString(reviewPath, "{\"review_status\":\"ok\",\"final_markdown\":\"# 다시 쓴 글\"}");
+        Workflow workflow = new Workflow(workflowId, "project-restyle", "TIME_BASED", 90, "preset_a", WorkflowStatus.COMPLETED);
+        workflow.recordPhotoInfoArtifacts(3, tempDir.resolve("bundle.json").toString(), null);
+        workflow.recordDraftArtifacts(2, draftPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+        when(styleAgentPort.applyStyle(any(), any(), any())).thenReturn(new StyleResult(120, stylePath.toString()));
+        when(reviewAgentPort.reviewDocument(any(), any(), any())).thenReturn(new ReviewResult(0, reviewPath.toString()));
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/restyle", workflowId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"voiceProfileId\":\"preset_b\"}"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.finalMarkdown").value("# 다시 쓴 글"))
+            .andExpect(jsonPath("$.styleStatus").value("ok"))
+            .andExpect(jsonPath("$.reviewStatus").value("ok"));
+
+        verify(workflowRepository).save(workflow);
     }
 
     @Test
@@ -185,6 +263,52 @@ class WorkflowControllerTest {
 
         mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/unknown", workflowId))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("워크플로 프로젝트 이미지 파일을 내려준다")
+    void downloadsProjectImageFile() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f17");
+        Path projectDir = Files.createDirectories(tempDir.resolve("project-007"));
+        Path image = projectDir.resolve("IMG_0001.jpg");
+        Files.write(image, new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff});
+        Workflow workflow = new Workflow(workflowId, "project-007", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+        when(photoInfoPipelineProperties.inputRoot()).thenReturn(tempDir.toString());
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/files/{fileName}", workflowId, "IMG_0001.jpg"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Type", "image/jpeg"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"clip.mp4:video/mp4", "clip.m4v:video/mp4", "clip.mov:video/quicktime"})
+    @DisplayName("워크플로 프로젝트 동영상 파일은 동영상 Content-Type으로 내려준다")
+    void downloadsProjectVideoFile(String fileAndType) throws Exception {
+        String[] parts = fileAndType.split(":");
+        String fileName = parts[0];
+        String contentType = parts[1];
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f37");
+        Path projectDir = Files.createDirectories(tempDir.resolve("project-video"));
+        Files.write(projectDir.resolve(fileName), new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p'});
+        Workflow workflow = new Workflow(workflowId, "project-video", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+        when(photoInfoPipelineProperties.inputRoot()).thenReturn(tempDir.toString());
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/files/{fileName}", workflowId, fileName))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Type", contentType));
+    }
+
+    @Test
+    @DisplayName("프로젝트 이미지 다운로드는 경로 이동을 거절한다")
+    void rejectsUnsafeProjectFileName() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f18");
+        Workflow workflow = new Workflow(workflowId, "project-008", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/files/{fileName}", workflowId, "..%2Fsecret.jpg"))
+            .andExpect(status().isBadRequest());
     }
 
     @ParameterizedTest

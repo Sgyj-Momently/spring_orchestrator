@@ -8,6 +8,7 @@ import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -97,6 +98,16 @@ class WorkflowServiceTest {
         @Override
         public Optional<Workflow> findById(UUID workflowId) {
             return Optional.ofNullable(storage.get(workflowId));
+        }
+
+        @Override
+        public List<Workflow> findAll() {
+            return List.copyOf(storage.values());
+        }
+
+        @Override
+        public void deleteAll() {
+            storage.clear();
         }
     }
 }

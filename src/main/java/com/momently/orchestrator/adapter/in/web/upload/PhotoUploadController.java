@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 콘솔에서 선택한 로컬 사진을 서버 입력 폴더로 옮기는 API다.
+ * 콘솔에서 선택한 로컬 사진과 동영상을 서버 입력 폴더로 옮기는 API다.
  *
  * <p>JWT 인증 컨텍스트가 있어야 호출된다.</p>
  */
@@ -27,13 +27,25 @@ public class PhotoUploadController {
     }
 
     /**
-     * 여러 장의 이미지를 한 번에 올린 뒤, 워크플로 생성에 사용할 프로젝트 식별자를 돌려준다.
+     * 여러 미디어 파일을 한 번에 올린 뒤, 워크플로 생성에 사용할 프로젝트 식별자를 돌려준다.
+     *
+     * @param files 동일 이름 파트가 반복 가능한 multipart 파일 목록
+     */
+    @PostMapping(value = "/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PhotoUploadResponse> uploadMedia(@RequestPart("files") List<MultipartFile> files) {
+        return ResponseEntity.ok(photoUploadService.saveUploadedMedia(files));
+    }
+
+    /**
+     * 기존 콘솔/클라이언트 호환을 위한 이미지 업로드 경로다.
+     *
+     * <p>저장 정책은 {@code /media}와 동일하므로, 새 클라이언트는 {@code /media}를 우선 사용한다.</p>
      *
      * @param files 동일 이름 파트가 반복 가능한 multipart 파일 목록
      */
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PhotoUploadResponse> uploadImages(@RequestPart("files") List<MultipartFile> files) {
-        return ResponseEntity.ok(photoUploadService.saveUploadedImages(files));
+        return ResponseEntity.ok(photoUploadService.saveUploadedMedia(files));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

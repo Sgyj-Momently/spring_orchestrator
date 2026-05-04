@@ -33,9 +33,9 @@ class PhotoUploadControllerTest {
     private JwtService jwtService;
 
     @Test
-    @DisplayName("멀티파트 업로드가 성공하면 프로젝트 식별자를 반환한다")
+    @DisplayName("멀티파트 미디어 업로드가 성공하면 프로젝트 식별자를 반환한다")
     void returnsProjectIdOnSuccess() throws Exception {
-        when(photoUploadService.saveUploadedImages(anyList()))
+        when(photoUploadService.saveUploadedMedia(anyList()))
             .thenReturn(new PhotoUploadResponse("u_deadbeefdeadbeefdeadbeefdeadbeef", 2, 42L));
 
         MockMultipartFile a = new MockMultipartFile(
@@ -47,13 +47,13 @@ class PhotoUploadControllerTest {
 
         MockMultipartFile b = new MockMultipartFile(
             "files",
-            "2.png",
-            "image/png",
+            "2.mp4",
+            "video/mp4",
             new byte[] {2}
         );
 
         mockMvc.perform(
-                multipart("/api/v1/uploads/images")
+                multipart("/api/v1/uploads/media")
                     .file(a)
                     .file(b))
             .andExpect(status().isOk())
@@ -63,10 +63,10 @@ class PhotoUploadControllerTest {
     }
 
     @Test
-    @DisplayName("검증 실패 시 400과 에러 메시지를 반환한다")
-    void returnsBadRequestBody() throws Exception {
-        when(photoUploadService.saveUploadedImages(anyList()))
-            .thenThrow(new IllegalArgumentException("테스트 메시지"));
+    @DisplayName("기존 이미지 업로드 경로도 같은 미디어 저장 서비스를 사용한다")
+    void keepsLegacyImagesPath() throws Exception {
+        when(photoUploadService.saveUploadedMedia(anyList()))
+            .thenReturn(new PhotoUploadResponse("u_deadbeefdeadbeefdeadbeefdeadbeef", 1, 10L));
 
         MockMultipartFile part = new MockMultipartFile(
             "files",
@@ -76,6 +76,25 @@ class PhotoUploadControllerTest {
         );
 
         mockMvc.perform(multipart("/api/v1/uploads/images").file(part))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.projectId").value("u_deadbeefdeadbeefdeadbeefdeadbeef"))
+            .andExpect(jsonPath("$.savedCount").value(1));
+    }
+
+    @Test
+    @DisplayName("검증 실패 시 400과 에러 메시지를 반환한다")
+    void returnsBadRequestBody() throws Exception {
+        when(photoUploadService.saveUploadedMedia(anyList()))
+            .thenThrow(new IllegalArgumentException("테스트 메시지"));
+
+        MockMultipartFile part = new MockMultipartFile(
+            "files",
+            "1.png",
+            "image/png",
+            new byte[] {10}
+        );
+
+        mockMvc.perform(multipart("/api/v1/uploads/media").file(part))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").value("테스트 메시지"));
     }

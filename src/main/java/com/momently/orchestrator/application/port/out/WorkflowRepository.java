@@ -1,6 +1,7 @@
 package com.momently.orchestrator.application.port.out;
 
 import com.momently.orchestrator.domain.Workflow;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,4 +29,18 @@ public interface WorkflowRepository {
      * @return 조회된 워크플로, 존재하지 않으면 빈 Optional
      */
     Optional<Workflow> findById(UUID workflowId);
+
+    /**
+     * 최근 갱신된 워크플로부터 조회한다.
+     *
+     * @return 저장된 워크플로 목록
+     */
+    List<Workflow> findAll();
+
+    /**
+     * 저장된 워크플로 메타데이터를 모두 삭제한다.
+     *
+     * <p>파일 시스템에 남은 산출물 삭제는 별도 책임이다.</p>
+     */
+    void deleteAll();
 }

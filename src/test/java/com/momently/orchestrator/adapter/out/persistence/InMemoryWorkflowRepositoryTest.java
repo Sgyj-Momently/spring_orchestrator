@@ -30,6 +30,7 @@ class InMemoryWorkflowRepositoryTest {
 
         assertThat(saved).isSameAs(workflow);
         assertThat(repository.findById(workflowId)).containsSame(workflow);
+        assertThat(repository.findAll()).containsExactly(workflow);
     }
 
     @Test
@@ -38,5 +39,16 @@ class InMemoryWorkflowRepositoryTest {
         InMemoryWorkflowRepository repository = new InMemoryWorkflowRepository();
 
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("저장된 워크플로를 모두 삭제한다")
+    void deletesAllWorkflows() {
+        InMemoryWorkflowRepository repository = new InMemoryWorkflowRepository();
+        repository.save(new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.CREATED));
+
+        repository.deleteAll();
+
+        assertThat(repository.findAll()).isEmpty();
     }
 }

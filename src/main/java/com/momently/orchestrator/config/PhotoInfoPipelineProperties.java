@@ -17,6 +17,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param visionModel 사진별 이미지 분석에 사용할 비전 모델명
  * @param writerModel bundle 요약에 사용할 텍스트 모델명
  * @param ollamaTimeoutSeconds Ollama 호출이 멈췄을 때 실패로 전환할 타임아웃 초
+ * @param ffmpegCommand 동영상 대표 프레임 추출에 사용할 ffmpeg 명령 또는 절대 경로
+ * @param videoFrameSecond 동영상 첫 대표 프레임 추출 시점(초)
+ * @param videoFrameCount 동영상마다 추출을 시도할 최대 대표 프레임 수
+ * @param videoFrameIntervalSeconds 대표 프레임 추출 시점 사이 간격(초)
  * @param skipBlog 오케스트레이션 실행에서 선택적 블로그 생성 단계를 건너뛸지 여부
  * @param force 기존 캐시(EXIF/photo summary)를 무시하고 재생성할지 여부
  */
@@ -30,9 +34,43 @@ public record PhotoInfoPipelineProperties(
     String visionModel,
     String writerModel,
     int ollamaTimeoutSeconds,
+    String ffmpegCommand,
+    double videoFrameSecond,
+    int videoFrameCount,
+    double videoFrameIntervalSeconds,
     boolean skipBlog,
     boolean force
 ) {
+
+    public PhotoInfoPipelineProperties(
+        String pythonExecutable,
+        String scriptPath,
+        String inputRoot,
+        String outputRoot,
+        String ollamaBaseUrl,
+        String visionModel,
+        String writerModel,
+        int ollamaTimeoutSeconds,
+        boolean skipBlog,
+        boolean force
+    ) {
+        this(
+            pythonExecutable,
+            scriptPath,
+            inputRoot,
+            outputRoot,
+            ollamaBaseUrl,
+            visionModel,
+            writerModel,
+            ollamaTimeoutSeconds,
+            null,
+            0.0,
+            0,
+            0.0,
+            skipBlog,
+            force
+        );
+    }
 
     /**
      * 비어 있는 설정값에 로컬 개발 기본값을 채운다.
@@ -50,6 +88,16 @@ public record PhotoInfoPipelineProperties(
         writerModel = defaultIfBlank(writerModel, "qwen2.5:14b");
         if (ollamaTimeoutSeconds <= 0) {
             ollamaTimeoutSeconds = 180;
+        }
+        ffmpegCommand = defaultIfBlank(ffmpegCommand, "ffmpeg");
+        if (videoFrameSecond <= 0.0) {
+            videoFrameSecond = 1.0;
+        }
+        if (videoFrameCount <= 0) {
+            videoFrameCount = 3;
+        }
+        if (videoFrameIntervalSeconds <= 0.0) {
+            videoFrameIntervalSeconds = 4.0;
         }
     }
 
