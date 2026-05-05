@@ -69,6 +69,13 @@ class WorkflowStateMachineTest {
     }
 
     @Test
+    @DisplayName("완료된 워크플로는 문체 재적용을 위해 style 단계로 다시 진입할 수 있다")
+    void allowsCompletedToStyleApplyingForRestyle() {
+        assertThat(workflowStateMachine.canTransition(WorkflowStatus.COMPLETED, WorkflowStatus.STYLE_APPLYING))
+            .isTrue();
+    }
+
+    @Test
     @DisplayName("실패 이후에는 재시도 가능한 실행 단계로만 복귀할 수 있다")
     void allowsRetryFromFailedOnlyToExecutableStages() {
         assertThat(workflowStateMachine.canTransition(WorkflowStatus.FAILED, WorkflowStatus.PHOTO_GROUPING))

@@ -228,6 +228,11 @@ class PhotoUploadServiceTest {
             "dummy",
             "dummy",
             60,
+            "ffmpeg",
+            1.0,
+            3,
+            4.0,
+            4,
             true,
             false
         );

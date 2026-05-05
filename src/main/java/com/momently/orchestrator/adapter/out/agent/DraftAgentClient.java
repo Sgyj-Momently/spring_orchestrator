@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -44,7 +45,8 @@ public class DraftAgentClient implements DraftAgentPort {
         PhotoInfoResult photoInfoResult,
         PhotoGroupingResult photoGroupingResult,
         HeroPhotoResult heroPhotoResult,
-        OutlineResult outlineResult
+        OutlineResult outlineResult,
+        String voiceProfileId
     ) {
         Path outlinePath = Path.of(outlineResult.resultPath());
         Path resultPath = siblingStagePath(outlinePath, "draft", "draft.json");
@@ -55,6 +57,9 @@ public class DraftAgentClient implements DraftAgentPort {
         payload.put("groups", readField(Path.of(photoGroupingResult.resultPath()), "groups"));
         payload.put("hero_photos", readField(Path.of(heroPhotoResult.resultPath()), "hero_photos"));
         payload.put("photos", readField(Path.of(photoInfoResult.bundlePath()), "photos"));
+        if (voiceProfileId != null && !voiceProfileId.isBlank()) {
+            loadVoiceProfile(voiceProfileId).ifPresent(profile -> payload.put("voice_profile", profile));
+        }
 
         JsonNode body = post(payload);
         requireDraftSemanticOk(body);
@@ -94,6 +99,22 @@ public class DraftAgentClient implements DraftAgentPort {
         } catch (RestClientException exception) {
             throw new IllegalStateException("Failed to call draft agent: " + exception.getMessage(), exception);
         }
+    }
+
+    private Optional<JsonNode> loadVoiceProfile(String voiceProfileId) {
+        for (Path root : java.util.List.of(
+            // docker compose: momently-voice-data -> /var/lib/momently-voice (voice_profile_agent의 VOICE_PROFILE_DATA_DIR)
+            Path.of("/var/lib/momently-voice"),
+            // local/dev fallback
+            Path.of("../voice_profiles"),
+            Path.of("voice_profiles")
+        )) {
+            Path profilePath = root.resolve(voiceProfileId).resolve("profile.json").normalize();
+            if (Files.exists(profilePath)) {
+                return Optional.of(readJson(profilePath));
+            }
+        }
+        return Optional.empty();
     }
 
     private JsonNode readJson(Path path) {

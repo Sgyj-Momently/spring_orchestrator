@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Component;
 @Profile("local-photo-info")
 public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
 
+    private static final Logger log = LoggerFactory.getLogger(LocalPhotoInfoPipelineAdapter.class);
     private static final Path BUNDLE_FILE_RELATIVE = Path.of("bundles", "bundle.json");
 
     private final PhotoInfoPipelineProperties properties;
@@ -85,15 +88,13 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         Path blogPath = outputDir.resolve("blog.md");
 
         if (!Files.isDirectory(inputDir)) {
-            throw new IllegalStateException(
-                "Photo input directory does not exist or is not a directory: "
-                    + inputDir
-                    + " (projectId="
-                    + projectId
-                    + ", outputDir="
-                    + outputDir
-                    + ")"
+            log.warn(
+                "Photo input directory is missing. projectId={}, inputDir={}, outputDir={}",
+                projectId,
+                inputDir,
+                outputDir
             );
+            throw new IllegalStateException("업로드된 사진/동영상 묶음을 찾을 수 없습니다. 파일을 다시 업로드해 주세요.");
         }
 
         if (!properties.force() && Files.isRegularFile(bundlePath)) {
@@ -103,17 +104,14 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         commandExecutor.execute(buildCommand(inputDir, outputDir));
 
         if (!Files.isRegularFile(bundlePath)) {
-            throw new IllegalStateException(
-                "Photo info bundle not found at expected path: "
-                    + bundlePath
-                    + " (projectId="
-                    + projectId
-                    + ", inputDir="
-                    + inputDir
-                    + ", outputDir="
-                    + outputDir
-                    + ")"
+            log.warn(
+                "Photo info bundle is missing after pipeline execution. projectId={}, inputDir={}, outputDir={}, bundlePath={}",
+                projectId,
+                inputDir,
+                outputDir,
+                bundlePath
             );
+            throw new IllegalStateException("사진/동영상 분석 결과 파일을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         }
         return readResult(bundlePath, blogPath);
     }
@@ -152,6 +150,8 @@ public class LocalPhotoInfoPipelineAdapter implements PhotoInfoAgentPort {
         command.add(String.valueOf(properties.videoFrameCount()));
         command.add("--video-frame-interval-seconds");
         command.add(String.valueOf(properties.videoFrameIntervalSeconds()));
+        command.add("--analysis-concurrency");
+        command.add(String.valueOf(properties.analysisConcurrency()));
         if (properties.skipBlog()) {
             command.add("--skip-blog");
         }

@@ -1,6 +1,8 @@
 package com.momently.orchestrator.adapter.in.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -20,6 +22,7 @@ import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import com.momently.orchestrator.domain.Workflow;
+import com.momently.orchestrator.application.service.WorkflowStateMachine;
 import com.momently.orchestrator.security.JwtService;
 import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.List;
@@ -33,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
@@ -42,6 +46,7 @@ import java.nio.file.Path;
  * 워크플로 웹 어댑터의 요청/응답 계약을 검증한다.
  */
 @WebMvcTest(WorkflowController.class)
+@Import(RestApiExceptionHandler.class)
 @AutoConfigureMockMvc(addFilters = false)
 class WorkflowControllerTest {
 
@@ -72,6 +77,12 @@ class WorkflowControllerTest {
 
     @MockBean
     private WorkflowRepository workflowRepository;
+
+    @MockBean
+    private WorkflowSseEventPublisher workflowSseEventPublisher;
+
+    @MockBean
+    private WorkflowStateMachine workflowStateMachine;
 
     @TempDir
     Path tempDir;
@@ -121,6 +132,18 @@ class WorkflowControllerTest {
     }
 
     @Test
+    @DisplayName("없는 워크플로 조회 시 404 JSON")
+    void getMissingWorkflowReturns404() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f99");
+        when(getWorkflowUseCase.getWorkflow(workflowId))
+            .thenThrow(new IllegalArgumentException("Workflow not found: " + workflowId));
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}", workflowId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("워크플로를 찾을 수 없습니다."));
+    }
+
+    @Test
     @DisplayName("워크플로 조회 시 HATEOAS 응답을 반환한다")
     void getsWorkflow() throws Exception {
         UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f11");
@@ -141,6 +164,23 @@ class WorkflowControllerTest {
             .andExpect(jsonPath("$.status").value("PHOTO_GROUPED"))
             .andExpect(jsonPath("$._links.self.href").exists())
             .andExpect(jsonPath("$._links.run.href").exists());
+    }
+
+    @Test
+    @DisplayName("워크플로 상태 이벤트 SSE 스트림을 연다")
+    void subscribesWorkflowEvents() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f39");
+        Workflow workflow = new Workflow(workflowId, "project-events", "TIME_BASED", 90, WorkflowStatus.CREATED);
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter =
+            new org.springframework.web.servlet.mvc.method.annotation.SseEmitter();
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+        when(workflowSseEventPublisher.subscribe(workflow)).thenReturn(emitter);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/events", workflowId))
+            .andExpect(status().isOk());
+
+        verify(workflowSseEventPublisher).subscribe(workflow);
+        emitter.complete();
     }
 
     @Test
@@ -176,10 +216,57 @@ class WorkflowControllerTest {
     @DisplayName("워크플로 실행 요청을 받아 202 Accepted와 상태 조회용 Location 헤더를 반환한다")
     void runsWorkflow() throws Exception {
         UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f12");
+        Workflow workflow = new Workflow(workflowId, "project-run", "TIME_BASED", 90, WorkflowStatus.CREATED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
 
         mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
             .andExpect(status().isAccepted())
-            .andExpect(header().exists("Location"));
+            .andExpect(header().exists("Location"))
+            .andExpect(jsonPath("$.status").value("started"));
+
+        verify(runWorkflowUseCase).runWorkflow(workflowId);
+    }
+
+    @Test
+    @DisplayName("실행 중인 워크플로 실행 요청은 중복 실행하지 않고 멱등 응답한다")
+    void runWorkflowIsIdempotentWhileRunning() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f42");
+        Workflow workflow = new Workflow(workflowId, "project-running", "TIME_BASED", 90, WorkflowStatus.DRAFT_CREATING);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.status").value("already_running"));
+
+        verify(runWorkflowUseCase, never()).runWorkflow(workflowId);
+    }
+
+    @Test
+    @DisplayName("실패한 워크플로는 retry 엔드포인트로 재실행한다")
+    void retriesFailedWorkflow() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f43");
+        Workflow workflow = new Workflow(workflowId, "project-retry", "TIME_BASED", 90, WorkflowStatus.FAILED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/retry", workflowId))
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.status").value("retry_started"));
+
+        verify(runWorkflowUseCase).runWorkflow(workflowId);
+    }
+
+    @Test
+    @DisplayName("실패 상태가 아닌 워크플로 retry 요청은 409로 거절한다")
+    void rejectsRetryForNonFailedWorkflow() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f44");
+        Workflow workflow = new Workflow(workflowId, "project-retry", "TIME_BASED", 90, WorkflowStatus.CREATED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/retry", workflowId))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.status").value("not_retryable"));
+
+        verify(runWorkflowUseCase, never()).runWorkflow(workflowId);
     }
 
     @Test
@@ -202,12 +289,11 @@ class WorkflowControllerTest {
         mockMvc.perform(post("/api/v1/workflows/{workflowId}/restyle", workflowId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"voiceProfileId\":\"preset_b\"}"))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.finalMarkdown").value("# 다시 쓴 글"))
-            .andExpect(jsonPath("$.styleStatus").value("ok"))
-            .andExpect(jsonPath("$.reviewStatus").value("ok"));
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.status").value("processing"))
+            .andExpect(jsonPath("$.workflowId").value(workflowId.toString()));
 
-        verify(workflowRepository).save(workflow);
+        verify(workflowRepository, timeout(1000).atLeastOnce()).save(workflow);
     }
 
     @Test

@@ -16,7 +16,8 @@ public interface DraftAgentPort {
         PhotoInfoResult photoInfoResult,
         PhotoGroupingResult photoGroupingResult,
         HeroPhotoResult heroPhotoResult,
-        OutlineResult outlineResult
+        OutlineResult outlineResult,
+        String voiceProfileId
     );
 }
 

@@ -69,7 +69,7 @@ public class WorkflowStateMachine {
                 WorkflowStatus.REVIEWING
             )
         );
-        allowedTransitions.put(WorkflowStatus.COMPLETED, EnumSet.noneOf(WorkflowStatus.class));
+        allowedTransitions.put(WorkflowStatus.COMPLETED, EnumSet.of(WorkflowStatus.STYLE_APPLYING));
     }
 
     /**

@@ -91,9 +91,12 @@ class WorkflowRunnerTest {
             },
             (projectId, photoInfoResult, photoGroupingResult) -> new HeroPhotoResult(0, null),
             (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult) -> new OutlineResult(0, null),
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult) -> new DraftResult(0, null),
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult, voiceProfileId) ->
+                new DraftResult(0, null),
             (projectId, draftResult, voiceProfileId) -> new StyleResult(0, null),
-            (projectId, photoInfoResult, styleResult) -> new ReviewResult(0, null)
+            (projectId, photoInfoResult, styleResult) -> new ReviewResult(0, null),
+            workflowEvent -> {
+            }
         );
 
         assertThatThrownBy(() -> runner.runWorkflow(workflow.getWorkflowId()))
@@ -326,7 +329,7 @@ class WorkflowRunnerTest {
                 executionLog.add("outline:%s".formatted(heroPhotoResult.resultPath()));
                 return new OutlineResult(4, "artifacts/outline/project-001/outline.json");
             },
-            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult) -> {
+            (projectId, photoInfoResult, photoGroupingResult, heroPhotoResult, outlineResult, voiceProfileId) -> {
                 executionLog.add("draft:%s".formatted(outlineResult.resultPath()));
                 return new DraftResult(4, "artifacts/draft/project-001/draft.json");
             },
@@ -337,6 +340,8 @@ class WorkflowRunnerTest {
             (projectId, photoInfoResult, styleResult) -> {
                 executionLog.add("review:%s".formatted(styleResult.resultPath()));
                 return new ReviewResult(0, "artifacts/review/project-001/final.json");
+            },
+            workflowEvent -> {
             }
         );
     }

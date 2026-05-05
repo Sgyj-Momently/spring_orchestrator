@@ -33,6 +33,7 @@ class PhotoInfoPipelinePropertiesBindingTest {
                 "agents.photo-info.pipeline.video-frame-second=2.5",
                 "agents.photo-info.pipeline.video-frame-count=4",
                 "agents.photo-info.pipeline.video-frame-interval-seconds=3.5",
+                "agents.photo-info.pipeline.analysis-concurrency=6",
                 "agents.photo-info.pipeline.skip-blog=false"
             )
             .run(context -> {
@@ -53,6 +54,7 @@ class PhotoInfoPipelinePropertiesBindingTest {
                 assertThat(properties.videoFrameSecond()).isEqualTo(2.5);
                 assertThat(properties.videoFrameCount()).isEqualTo(4);
                 assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(3.5);
+                assertThat(properties.analysisConcurrency()).isEqualTo(6);
                 assertThat(properties.skipBlog()).isFalse();
             });
     }

@@ -2,7 +2,6 @@ package com.momently.orchestrator.adapter.in.web;
 
 import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.adapter.in.web.request.RestyleRequest;
-import com.momently.orchestrator.adapter.in.web.response.RestyleResponse;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowArtifactResponse;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowResponse;
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
@@ -21,16 +20,19 @@ import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
+import com.momently.orchestrator.application.service.WorkflowStateMachine;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.hateoas.EntityModel;
@@ -46,6 +48,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 워크플로 REST API를 노출하는 웹 인바운드 어댑터
@@ -53,6 +56,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/workflows")
 public class WorkflowController {
+
+    private static final Set<WorkflowStatus> RUNNING_STATUSES = EnumSet.of(
+        WorkflowStatus.PHOTO_INFO_EXTRACTING,
+        WorkflowStatus.PRIVACY_REVIEWING,
+        WorkflowStatus.QUALITY_SCORING,
+        WorkflowStatus.PHOTO_GROUPING,
+        WorkflowStatus.HERO_PHOTO_SELECTING,
+        WorkflowStatus.OUTLINE_CREATING,
+        WorkflowStatus.DRAFT_CREATING,
+        WorkflowStatus.STYLE_APPLYING,
+        WorkflowStatus.REVIEWING
+    );
 
     private final CreateWorkflowUseCase createWorkflowUseCase;
     private final GetWorkflowUseCase getWorkflowUseCase;
@@ -62,6 +77,8 @@ public class WorkflowController {
     private final StyleAgentPort styleAgentPort;
     private final ReviewAgentPort reviewAgentPort;
     private final WorkflowRepository workflowRepository;
+    private final WorkflowSseEventPublisher workflowSseEventPublisher;
+    private final WorkflowStateMachine workflowStateMachine;
 
     /**
      * 워크플로 컨트롤러를 생성한다.
@@ -81,7 +98,9 @@ public class WorkflowController {
         PhotoInfoPipelineProperties photoInfoPipelineProperties,
         StyleAgentPort styleAgentPort,
         ReviewAgentPort reviewAgentPort,
-        WorkflowRepository workflowRepository
+        WorkflowRepository workflowRepository,
+        WorkflowSseEventPublisher workflowSseEventPublisher,
+        WorkflowStateMachine workflowStateMachine
     ) {
         this.createWorkflowUseCase = createWorkflowUseCase;
         this.getWorkflowUseCase = getWorkflowUseCase;
@@ -91,6 +110,8 @@ public class WorkflowController {
         this.styleAgentPort = styleAgentPort;
         this.reviewAgentPort = reviewAgentPort;
         this.workflowRepository = workflowRepository;
+        this.workflowSseEventPublisher = workflowSseEventPublisher;
+        this.workflowStateMachine = workflowStateMachine;
     }
 
     /**
@@ -137,6 +158,18 @@ public class WorkflowController {
     }
 
     /**
+     * 워크플로 상태 변경 이벤트를 SSE로 구독한다.
+     *
+     * @param workflowId 워크플로 식별자
+     * @return 현재 상태 snapshot 이후 변경 이벤트를 전달하는 SSE stream
+     */
+    @GetMapping(value = "/{workflowId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribeWorkflowEvents(@PathVariable UUID workflowId) {
+        Workflow workflow = getWorkflowUseCase.getWorkflow(workflowId);
+        return workflowSseEventPublisher.subscribe(workflow);
+    }
+
+    /**
      * 콘솔 작업 기록을 모두 삭제한다.
      *
      * <p>워크플로 메타데이터만 삭제하며, 이미 생성된 산출물 파일은 건드리지 않는다.</p>
@@ -156,13 +189,54 @@ public class WorkflowController {
      * @return Location 헤더에 워크플로 상태 조회 URL이 담긴 202 Accepted
      */
     @PostMapping("/{workflowId}/run")
-    public ResponseEntity<Void> runWorkflow(@PathVariable UUID workflowId) {
+    public ResponseEntity<Map<String, String>> runWorkflow(@PathVariable UUID workflowId) {
+        return startWorkflow(workflowId, false);
+    }
+
+    /**
+     * 실패한 워크플로를 명시적으로 재시도한다.
+     *
+     * <p>기존 run 엔드포인트도 FAILED 재실행을 지원하지만, 운영/콘솔 UX에서는 retry 의도가 드러나는
+     * 별도 링크가 있으면 로그와 사용자 메시지가 더 명확하다.</p>
+     */
+    @PostMapping("/{workflowId}/retry")
+    public ResponseEntity<Map<String, String>> retryWorkflow(@PathVariable UUID workflowId) {
+        return startWorkflow(workflowId, true);
+    }
+
+    private ResponseEntity<Map<String, String>> startWorkflow(UUID workflowId, boolean retryOnly) {
+        Workflow workflow = getWorkflowUseCase.getWorkflow(workflowId);
+        if (RUNNING_STATUSES.contains(workflow.getStatus())) {
+            return acceptedWorkflow(workflowId, "already_running");
+        }
+        if (workflow.getStatus() == WorkflowStatus.COMPLETED) {
+            return acceptedWorkflow(workflowId, "already_completed");
+        }
+        if (retryOnly && workflow.getStatus() != WorkflowStatus.FAILED) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                    "status", "not_retryable",
+                    "workflowId", workflowId.toString(),
+                    "currentStatus", workflow.getStatus().name()
+                ));
+        }
         runWorkflowUseCase.runWorkflow(workflowId);
+        return acceptedWorkflow(workflowId, retryOnly ? "retry_started" : "started");
+    }
+
+    private ResponseEntity<Map<String, String>> acceptedWorkflow(UUID workflowId, String status) {
         return ResponseEntity.accepted()
             .location(WebMvcLinkBuilder.linkTo(
                 WebMvcLinkBuilder.methodOn(WorkflowController.class).getWorkflow(workflowId)
             ).toUri())
-            .build();
+            .body(Map.of("status", status, "workflowId", workflowId.toString()));
+    }
+
+    private static boolean isRestyleRunning(WorkflowStatus status) {
+        return status == WorkflowStatus.STYLE_APPLYING
+            || status == WorkflowStatus.REVIEWING
+            || status == WorkflowStatus.STYLE_APPLIED
+            || status == WorkflowStatus.REVIEW_COMPLETED;
     }
 
     /**
@@ -173,7 +247,7 @@ public class WorkflowController {
      *
      * @param workflowId 워크플로 식별자
      * @param request restyle 요청 본문
-     * @return 201 Created with 최종 마크다운, style 상태, review 상태
+     * @return 202 Accepted with 비동기 처리 상태
      */
     @PostMapping("/{workflowId}/restyle")
     public ResponseEntity<Map<String, String>> restyleWorkflow(
@@ -181,8 +255,17 @@ public class WorkflowController {
         @RequestBody(required = false) RestyleRequest request
     ) {
         Workflow workflow = getWorkflowUseCase.getWorkflow(workflowId);
+        if (isRestyleRunning(workflow.getStatus())) {
+            return ResponseEntity.accepted()
+                .body(Map.of("status", "already_running", "workflowId", workflowId.toString()));
+        }
         if (workflow.getStatus() != WorkflowStatus.COMPLETED) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                    "status", "not_restyleable",
+                    "workflowId", workflowId.toString(),
+                    "currentStatus", workflow.getStatus().name()
+                ));
         }
         String draftResultPath = workflow.getDraftResultPath();
         if (draftResultPath == null || draftResultPath.isBlank()) {
@@ -194,7 +277,9 @@ public class WorkflowController {
             : workflow.getVoiceProfileId();
         String extraInstructions = request != null ? request.extraInstructions() : null;
 
-        // 비동기 실행 — LLM 호출이 수 분 걸릴 수 있으므로 즉시 202 반환 후 백그라운드에서 처리
+        advanceAndPublish(workflow, WorkflowStatus.STYLE_APPLYING);
+
+        // 비동기 실행 - LLM 호출이 수 분 걸릴 수 있으므로 즉시 202 반환 후 백그라운드에서 처리
         CompletableFuture.runAsync(() -> executeRestyle(workflow, effectiveVoiceProfileId, extraInstructions));
 
         return ResponseEntity.accepted()
@@ -210,6 +295,7 @@ public class WorkflowController {
                 workflow.getProjectId(), draftResult, voiceProfileId
             );
             workflow.recordStyleArtifacts(styleResult.wordCount(), styleResult.resultPath());
+            advanceAndPublish(workflow, WorkflowStatus.STYLE_APPLIED);
 
             String bundlePath = workflow.getQualityScoreBundlePath() != null
                 ? workflow.getQualityScoreBundlePath()
@@ -219,28 +305,25 @@ public class WorkflowController {
             int photoCount = workflow.getPhotoCount() == null ? 0 : workflow.getPhotoCount();
             PhotoInfoResult photoInfoResult = new PhotoInfoResult(photoCount, bundlePath, workflow.getBlogPath());
 
+            advanceAndPublish(workflow, WorkflowStatus.REVIEWING);
             ReviewResult reviewResult = reviewAgentPort.reviewDocument(
                 workflow.getProjectId(), photoInfoResult, styleResult
             );
             workflow.recordReviewArtifacts(reviewResult.issueCount(), reviewResult.resultPath());
-            workflowRepository.save(workflow);
+            advanceAndPublish(workflow, WorkflowStatus.REVIEW_COMPLETED);
+            advanceAndPublish(workflow, WorkflowStatus.COMPLETED);
         } catch (Exception e) {
-            // 로그만 남기고 조용히 종료 (클라이언트는 폴링으로 결과 확인)
+            workflow.markFailed(workflow.getStatus().name(), e.getMessage());
+            workflowRepository.save(workflow);
+            workflowSseEventPublisher.publish(workflow);
             System.err.println("[restyle] 실패: " + e.getMessage());
         }
     }
 
-    private String readJsonField(Path path, String fieldName) {
-        try {
-            if (!Files.exists(path)) {
-                return null;
-            }
-            JsonNode root = objectMapper.readTree(path.toFile());
-            JsonNode field = root.get(fieldName);
-            return field != null && !field.isNull() ? field.asText() : null;
-        } catch (IOException exception) {
-            return null;
-        }
+    private void advanceAndPublish(Workflow workflow, WorkflowStatus nextStatus) {
+        workflowStateMachine.transition(workflow, nextStatus);
+        workflowRepository.save(workflow);
+        workflowSseEventPublisher.publish(workflow);
     }
 
     /**
@@ -335,7 +418,10 @@ public class WorkflowController {
                 .withSelfRel(),
             WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(WorkflowController.class)
                 .runWorkflow(workflow.getWorkflowId()))
-                .withRel("run")
+                .withRel("run"),
+            WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(WorkflowController.class)
+                .retryWorkflow(workflow.getWorkflowId()))
+                .withRel("retry")
         );
     }
 

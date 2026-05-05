@@ -74,6 +74,10 @@ public class Workflow {
      */
     public void updateStatus(WorkflowStatus status) {
         this.status = Objects.requireNonNull(status);
+        if (status != WorkflowStatus.FAILED) {
+            this.lastFailedStep = null;
+            this.lastErrorMessage = null;
+        }
     }
 
     /**

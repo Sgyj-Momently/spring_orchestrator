@@ -2,6 +2,7 @@ package com.momently.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -116,6 +117,29 @@ class OrchestratorApiSecurityIntegrationTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workflowId").exists());
+    }
+
+    @Test
+    @DisplayName("로그인 후 작업 기록 목록을 조회한다")
+    void workflowListWithJwtSucceeds() throws Exception {
+        String token = MAPPER.readTree(loginOk().getResponse().getContentAsString())
+            .get("accessToken")
+            .asText();
+
+        mockMvc.perform(post("/api/v1/workflows")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer " + token)
+                .content("""
+                    {"projectId":"history-project","groupingStrategy":"TIME_BASED","timeWindowMinutes":90}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.workflowId").exists());
+
+        mockMvc.perform(get("/api/v1/workflows")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[*].projectId", hasItem("history-project")))
+            .andExpect(jsonPath("$[?(@.projectId == 'history-project')].status", hasItem("CREATED")));
     }
 
     @Test

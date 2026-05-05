@@ -57,7 +57,13 @@ public class StyleAgentClient implements StyleAgentPort {
     }
 
     private Optional<JsonNode> loadVoiceProfile(String voiceProfileId) {
-        for (Path root : java.util.List.of(Path.of("../voice_profiles"), Path.of("voice_profiles"))) {
+        for (Path root : java.util.List.of(
+            // docker compose: momently-voice-data -> /var/lib/momently-voice (voice_profile_agent의 VOICE_PROFILE_DATA_DIR)
+            Path.of("/var/lib/momently-voice"),
+            // local/dev fallback
+            Path.of("../voice_profiles"),
+            Path.of("voice_profiles")
+        )) {
             Path profilePath = root.resolve(voiceProfileId).resolve("profile.json").normalize();
             if (Files.exists(profilePath)) {
                 return Optional.of(readJson(profilePath));

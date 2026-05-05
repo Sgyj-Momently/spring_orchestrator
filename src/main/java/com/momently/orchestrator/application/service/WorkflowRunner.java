@@ -10,6 +10,7 @@ import com.momently.orchestrator.application.port.out.PrivacySafetyAgentPort;
 import com.momently.orchestrator.application.port.out.QualityScoreAgentPort;
 import com.momently.orchestrator.application.port.out.ReviewAgentPort;
 import com.momently.orchestrator.application.port.out.StyleAgentPort;
+import com.momently.orchestrator.application.port.out.WorkflowEventPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.application.port.out.result.DraftResult;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
@@ -60,6 +61,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private final DraftAgentPort draftAgentPort;
     private final StyleAgentPort styleAgentPort;
     private final ReviewAgentPort reviewAgentPort;
+    private final WorkflowEventPort workflowEventPort;
 
     /**
      * 워크플로 실행기에 필요한 의존성을 생성한다.
@@ -82,7 +84,8 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         OutlineAgentPort outlineAgentPort,
         DraftAgentPort draftAgentPort,
         StyleAgentPort styleAgentPort,
-        ReviewAgentPort reviewAgentPort
+        ReviewAgentPort reviewAgentPort,
+        WorkflowEventPort workflowEventPort
     ) {
         this.workflowRepository = workflowRepository;
         this.workflowStateMachine = workflowStateMachine;
@@ -95,6 +98,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         this.draftAgentPort = draftAgentPort;
         this.styleAgentPort = styleAgentPort;
         this.reviewAgentPort = reviewAgentPort;
+        this.workflowEventPort = workflowEventPort;
     }
 
     /**
@@ -124,6 +128,7 @@ public class WorkflowRunner implements RunWorkflowUseCase {
         } catch (RuntimeException exception) {
             workflow.markFailed(workflow.getStatus().name(), exception.getMessage());
             workflowRepository.save(workflow);
+            workflowEventPort.publish(workflow);
             throw exception;
         }
     }
@@ -340,7 +345,8 @@ public class WorkflowRunner implements RunWorkflowUseCase {
             photoInfoResult,
             photoGroupingResult,
             heroPhotoResult,
-            outlineResult
+            outlineResult,
+            workflow.getVoiceProfileId()
         );
         workflow.recordDraftArtifacts(draftResult.draftSectionCount(), draftResult.resultPath());
         advance(workflow, WorkflowStatus.DRAFT_CREATED);
@@ -421,5 +427,6 @@ public class WorkflowRunner implements RunWorkflowUseCase {
     private void advance(Workflow workflow, WorkflowStatus nextStatus) {
         workflowStateMachine.transition(workflow, nextStatus);
         workflowRepository.save(workflow);
+        workflowEventPort.publish(workflow);
     }
 }

@@ -25,6 +25,11 @@ class LocalPhotoInfoProcessCommandExecutorTest {
             "unused",
             "unused",
             1,
+            "ffmpeg",
+            1.0,
+            3,
+            4.0,
+            4,
             true,
             false
         );
@@ -54,6 +59,11 @@ class LocalPhotoInfoProcessCommandExecutorTest {
             "unused",
             "unused",
             1,
+            "ffmpeg",
+            1.0,
+            3,
+            4.0,
+            4,
             true,
             false
         );
@@ -80,4 +90,3 @@ class LocalPhotoInfoProcessCommandExecutorTest {
             .hasMessageContaining("boom");
     }
 }
-
