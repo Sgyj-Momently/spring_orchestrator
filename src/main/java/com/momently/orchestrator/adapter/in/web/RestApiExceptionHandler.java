@@ -3,6 +3,8 @@ package com.momently.orchestrator.adapter.in.web;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -21,5 +23,15 @@ public class RestApiExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(Map.of("error", message.isEmpty() ? "잘못된 요청입니다." : message));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
+        String field = ex.getBindingResult().getFieldErrors().stream()
+            .findFirst()
+            .map(FieldError::getField)
+            .orElse("request");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(Map.of("error", field + " 값을 확인해 주세요."));
     }
 }

@@ -13,6 +13,8 @@ public class Workflow {
     private final String groupingStrategy;
     private final int timeWindowMinutes;
     private final String voiceProfileId;
+    private final String contentType;
+    private final String writingInstructions;
     private WorkflowStatus status;
     private String lastFailedStep;
     private String lastErrorMessage;
@@ -59,11 +61,26 @@ public class Workflow {
         String voiceProfileId,
         WorkflowStatus status
     ) {
+        this(workflowId, projectId, groupingStrategy, timeWindowMinutes, voiceProfileId, null, null, status);
+    }
+
+    public Workflow(
+        UUID workflowId,
+        String projectId,
+        String groupingStrategy,
+        int timeWindowMinutes,
+        String voiceProfileId,
+        String contentType,
+        String writingInstructions,
+        WorkflowStatus status
+    ) {
         this.workflowId = Objects.requireNonNull(workflowId);
         this.projectId = Objects.requireNonNull(projectId);
         this.groupingStrategy = Objects.requireNonNull(groupingStrategy);
         this.timeWindowMinutes = timeWindowMinutes;
         this.voiceProfileId = voiceProfileId;
+        this.contentType = contentType;
+        this.writingInstructions = writingInstructions;
         this.status = Objects.requireNonNull(status);
     }
 
@@ -213,6 +230,14 @@ public class Workflow {
 
     public String getVoiceProfileId() {
         return voiceProfileId;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public String getWritingInstructions() {
+        return writingInstructions;
     }
 
     public WorkflowStatus getStatus() {

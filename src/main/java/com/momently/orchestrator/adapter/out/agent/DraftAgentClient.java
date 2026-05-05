@@ -48,10 +48,35 @@ public class DraftAgentClient implements DraftAgentPort {
         OutlineResult outlineResult,
         String voiceProfileId
     ) {
+        return createDraft(
+            projectId,
+            photoInfoResult,
+            photoGroupingResult,
+            heroPhotoResult,
+            outlineResult,
+            voiceProfileId,
+            null,
+            null
+        );
+    }
+
+    @Override
+    public DraftResult createDraft(
+        String projectId,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult,
+        OutlineResult outlineResult,
+        String voiceProfileId,
+        String contentType,
+        String writingInstructions
+    ) {
         Path outlinePath = Path.of(outlineResult.resultPath());
         Path resultPath = siblingStagePath(outlinePath, "draft", "draft.json");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("project_id", projectId);
+        payload.put("content_type", contentType);
+        payload.put("writing_instructions", writingInstructions);
         JsonNode outline = readJson(outlinePath).path("outline");
         payload.put("outline", outline.isObject() ? outline : Map.of("title", projectId, "sections", java.util.List.of()));
         payload.put("groups", readField(Path.of(photoGroupingResult.resultPath()), "groups"));

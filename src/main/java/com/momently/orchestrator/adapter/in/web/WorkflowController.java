@@ -2,6 +2,7 @@ package com.momently.orchestrator.adapter.in.web;
 
 import com.momently.orchestrator.adapter.in.web.request.CreateWorkflowRequest;
 import com.momently.orchestrator.adapter.in.web.request.RestyleRequest;
+import com.momently.orchestrator.adapter.in.web.request.SaveArtifactEditRequest;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowArtifactResponse;
 import com.momently.orchestrator.adapter.in.web.response.WorkflowResponse;
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
@@ -26,6 +27,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -56,6 +60,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/v1/workflows")
 public class WorkflowController {
+
+    private static final DateTimeFormatter ARTIFACT_EDIT_TIMESTAMP =
+        DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS").withZone(ZoneOffset.UTC);
 
     private static final Set<WorkflowStatus> RUNNING_STATUSES = EnumSet.of(
         WorkflowStatus.PHOTO_INFO_EXTRACTING,
@@ -139,7 +146,9 @@ public class WorkflowController {
                 request.projectId(),
                 request.groupingStrategy(),
                 request.resolvedTimeWindowMinutes(),
-                request.voiceProfileId()
+                request.voiceProfileId(),
+                request.contentType(),
+                request.writingInstructions()
             )
         );
         return ResponseEntity.ok(toModel(workflow));
@@ -356,6 +365,71 @@ public class WorkflowController {
     }
 
     /**
+     * 사용자가 콘솔에서 편집한 마크다운 산출물을 원본 아티팩트 옆에 저장한다.
+     *
+     * <p>최신본과 타임스탬프 버전 파일을 함께 남겨 브라우저를 바꿔도 수정본을 이어서 열 수 있다.</p>
+     */
+    @PostMapping("/{workflowId}/artifacts/{artifactType}/edits")
+    public ResponseEntity<WorkflowArtifactResponse> saveArtifactEdit(
+        @PathVariable UUID workflowId,
+        @PathVariable String artifactType,
+        @Valid @RequestBody SaveArtifactEditRequest request
+    ) throws IOException {
+        Workflow workflow = getWorkflowUseCase.getWorkflow(workflowId);
+        Path sourcePath = existingArtifactPath(workflow, artifactType);
+        if (sourcePath == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Path editsDir = Files.createDirectories(sourcePath.getParent().resolve("edits"));
+        String normalizedType = normalizeArtifactType(artifactType);
+        Path versionPath = editsDir.resolve(
+            normalizedType + "-" + ARTIFACT_EDIT_TIMESTAMP.format(Instant.now()) + ".md"
+        );
+        Path latestPath = editsDir.resolve(normalizedType + "-latest.md");
+        Files.writeString(versionPath, request.markdown());
+        Files.writeString(latestPath, request.markdown());
+
+        return ResponseEntity.ok(new WorkflowArtifactResponse(
+            artifactType,
+            latestPath.toString(),
+            "text/markdown",
+            null,
+            request.markdown()
+        ));
+    }
+
+    /**
+     * 사용자가 이전에 서버에 저장한 최신 수정본을 반환한다.
+     */
+    @GetMapping("/{workflowId}/artifacts/{artifactType}/edits/latest")
+    public ResponseEntity<WorkflowArtifactResponse> getLatestArtifactEdit(
+        @PathVariable UUID workflowId,
+        @PathVariable String artifactType
+    ) throws IOException {
+        Workflow workflow = getWorkflowUseCase.getWorkflow(workflowId);
+        Path sourcePath = existingArtifactPath(workflow, artifactType);
+        if (sourcePath == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Path latestPath = sourcePath.getParent()
+            .resolve("edits")
+            .resolve(normalizeArtifactType(artifactType) + "-latest.md");
+        if (!Files.isRegularFile(latestPath)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(new WorkflowArtifactResponse(
+            artifactType,
+            latestPath.toString(),
+            "text/markdown",
+            null,
+            Files.readString(latestPath)
+        ));
+    }
+
+    /**
      * Markdown 미리보기에서 참조하는 프로젝트 원본 이미지를 내려준다.
      *
      * <p>파일명만 허용하고, 실제 경로는 서버 설정의 input-root/projectId 아래로만 제한한다.</p>
@@ -409,6 +483,22 @@ public class WorkflowController {
         };
     }
 
+    private Path existingArtifactPath(Workflow workflow, String artifactType) {
+        String artifactPath = artifactPath(workflow, artifactType);
+        if (artifactPath == null || artifactPath.isBlank()) {
+            return null;
+        }
+        Path path = Path.of(artifactPath);
+        if (!Files.exists(path) || path.getParent() == null) {
+            return null;
+        }
+        return path;
+    }
+
+    private static String normalizeArtifactType(String artifactType) {
+        return artifactType.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9-]", "-");
+    }
+
     private EntityModel<WorkflowResponse> toModel(Workflow workflow) {
         WorkflowResponse response = toResponse(workflow);
         return EntityModel.of(
@@ -430,6 +520,8 @@ public class WorkflowController {
             workflow.getWorkflowId(),
             workflow.getProjectId(),
             workflow.getGroupingStrategy(),
+            workflow.getContentType(),
+            workflow.getWritingInstructions(),
             workflow.getStatus(),
             workflow.getPhotoCount(),
             workflow.getPrivacyExcludedCount(),

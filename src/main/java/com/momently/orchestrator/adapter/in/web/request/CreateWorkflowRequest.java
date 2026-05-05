@@ -10,18 +10,22 @@ import jakarta.validation.constraints.NotBlank;
  * @param groupingStrategy 선택한 그룹화 전략
  * @param timeWindowMinutes 같은 이벤트를 묶을 최대 간격(분), null이면 90분 기본값
  * @param voiceProfileId 말투 프로필 식별자, null이면 기본 문체
+ * @param contentType 사용자가 선택한 글 종류
+ * @param writingInstructions 사용자가 추가로 입력한 작성 방향
  */
 public record CreateWorkflowRequest(
     @NotBlank String projectId,
     @NotBlank String groupingStrategy,
     @Min(1) Integer timeWindowMinutes,
-    String voiceProfileId
+    String voiceProfileId,
+    String contentType,
+    String writingInstructions
 ) {
 
     private static final int DEFAULT_TIME_WINDOW_MINUTES = 90;
 
     public CreateWorkflowRequest(String projectId, String groupingStrategy, Integer timeWindowMinutes) {
-        this(projectId, groupingStrategy, timeWindowMinutes, null);
+        this(projectId, groupingStrategy, timeWindowMinutes, null, null, null);
     }
 
     /**

@@ -128,7 +128,8 @@ class WorkflowControllerTest {
                       "groupingStrategy": ""
                     }
                     """))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("projectId 값을 확인해 주세요."));
     }
 
     @Test
@@ -327,6 +328,85 @@ class WorkflowControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.contentType").value("text/plain"))
             .andExpect(jsonPath("$.text").value("# Blog"));
+    }
+
+    @Test
+    @DisplayName("사용자가 편집한 artifact 마크다운을 서버에 저장한다")
+    void savesArtifactEdit() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f40");
+        Path reviewDir = Files.createDirectories(tempDir.resolve("review"));
+        Path finalPath = reviewDir.resolve("final.json");
+        Files.writeString(finalPath, "{\"final_markdown\":\"# 원본\"}");
+        Workflow workflow = new Workflow(workflowId, "project-edit", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/artifacts/review/edits", workflowId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"markdown\":\"# 서버 수정본\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.artifactType").value("review"))
+            .andExpect(jsonPath("$.contentType").value("text/markdown"))
+            .andExpect(jsonPath("$.text").value("# 서버 수정본"));
+
+        Path latestPath = reviewDir.resolve("edits").resolve("review-latest.md");
+        org.assertj.core.api.Assertions.assertThat(Files.readString(latestPath)).isEqualTo("# 서버 수정본");
+        try (var editFiles = Files.list(reviewDir.resolve("edits"))) {
+            org.assertj.core.api.Assertions.assertThat(editFiles
+                .filter(path -> path.getFileName().toString().matches("review-\\d{17}\\.md"))
+                .count()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("서버에 저장된 최신 artifact 수정본을 조회한다")
+    void getsLatestArtifactEdit() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f41");
+        Path reviewDir = Files.createDirectories(tempDir.resolve("review-latest"));
+        Path finalPath = reviewDir.resolve("final.json");
+        Files.writeString(finalPath, "{\"final_markdown\":\"# 원본\"}");
+        Files.createDirectories(reviewDir.resolve("edits"));
+        Files.writeString(reviewDir.resolve("edits").resolve("review-latest.md"), "# 최신 수정본");
+        Workflow workflow = new Workflow(workflowId, "project-edit-latest", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/review/edits/latest", workflowId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.artifactType").value("review"))
+            .andExpect(jsonPath("$.contentType").value("text/markdown"))
+            .andExpect(jsonPath("$.text").value("# 최신 수정본"));
+    }
+
+    @Test
+    @DisplayName("저장된 artifact 수정본이 없으면 404를 반환한다")
+    void returnsNotFoundForMissingArtifactEdit() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f42");
+        Path finalPath = tempDir.resolve("final-no-edit.json");
+        Files.writeString(finalPath, "{\"final_markdown\":\"# 원본\"}");
+        Workflow workflow = new Workflow(workflowId, "project-edit-empty", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(get("/api/v1/workflows/{workflowId}/artifacts/review/edits/latest", workflowId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("빈 artifact 수정본 저장 요청은 JSON 400을 반환한다")
+    void rejectsBlankArtifactEdit() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f43");
+        Path finalPath = tempDir.resolve("final-invalid-edit.json");
+        Files.writeString(finalPath, "{\"final_markdown\":\"# 원본\"}");
+        Workflow workflow = new Workflow(workflowId, "project-edit-invalid", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/artifacts/review/edits", workflowId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"markdown\":\"\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("markdown 값을 확인해 주세요."));
     }
 
     @Test

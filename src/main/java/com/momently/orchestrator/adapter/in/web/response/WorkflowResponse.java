@@ -9,6 +9,8 @@ import java.util.UUID;
  * @param workflowId 워크플로 식별자
  * @param projectId 프로젝트 식별자
  * @param groupingStrategy 선택한 그룹화 전략
+ * @param contentType 사용자가 선택한 글 종류
+ * @param writingInstructions 사용자가 추가로 입력한 작성 방향
  * @param status 현재 워크플로 상태
  * @param photoCount 이후 단계에 쓸 수 있는 공개 사진 수
  * @param privacyExcludedCount 민감정보 단계에서 제외한 사진 수
@@ -38,6 +40,8 @@ public record WorkflowResponse(
     UUID workflowId,
     String projectId,
     String groupingStrategy,
+    String contentType,
+    String writingInstructions,
     WorkflowStatus status,
     Integer photoCount,
     Integer privacyExcludedCount,
@@ -63,4 +67,65 @@ public record WorkflowResponse(
     String lastFailedStep,
     String lastErrorMessage
 ) {
+    public WorkflowResponse(
+        UUID workflowId,
+        String projectId,
+        String groupingStrategy,
+        WorkflowStatus status,
+        Integer photoCount,
+        Integer privacyExcludedCount,
+        Double averageQualityScore,
+        Integer groupCount,
+        Integer heroPhotoCount,
+        Integer outlineSectionCount,
+        Integer draftSectionCount,
+        Integer styledWordCount,
+        Integer reviewIssueCount,
+        String photoInfoBundlePath,
+        String privacyResultPath,
+        String privacyBundlePath,
+        String qualityScoreResultPath,
+        String qualityScoreBundlePath,
+        String blogPath,
+        String groupingResultPath,
+        String heroPhotoResultPath,
+        String outlineResultPath,
+        String draftResultPath,
+        String styleResultPath,
+        String reviewResultPath,
+        String lastFailedStep,
+        String lastErrorMessage
+    ) {
+        this(
+            workflowId,
+            projectId,
+            groupingStrategy,
+            null,
+            null,
+            status,
+            photoCount,
+            privacyExcludedCount,
+            averageQualityScore,
+            groupCount,
+            heroPhotoCount,
+            outlineSectionCount,
+            draftSectionCount,
+            styledWordCount,
+            reviewIssueCount,
+            photoInfoBundlePath,
+            privacyResultPath,
+            privacyBundlePath,
+            qualityScoreResultPath,
+            qualityScoreBundlePath,
+            blogPath,
+            groupingResultPath,
+            heroPhotoResultPath,
+            outlineResultPath,
+            draftResultPath,
+            styleResultPath,
+            reviewResultPath,
+            lastFailedStep,
+            lastErrorMessage
+        );
+    }
 }

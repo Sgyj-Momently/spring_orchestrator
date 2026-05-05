@@ -9,6 +9,8 @@ import java.util.UUID;
 record WorkflowEventPayload(
     UUID workflowId,
     String projectId,
+    String contentType,
+    String writingInstructions,
     String status,
     Integer photoCount,
     Integer privacyExcludedCount,
@@ -27,6 +29,8 @@ record WorkflowEventPayload(
         return new WorkflowEventPayload(
             workflow.getWorkflowId(),
             workflow.getProjectId(),
+            workflow.getContentType(),
+            workflow.getWritingInstructions(),
             workflow.getStatus().name(),
             workflow.getPhotoCount(),
             workflow.getPrivacyExcludedCount(),

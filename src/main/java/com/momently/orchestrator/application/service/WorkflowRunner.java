@@ -346,7 +346,9 @@ public class WorkflowRunner implements RunWorkflowUseCase {
             photoGroupingResult,
             heroPhotoResult,
             outlineResult,
-            workflow.getVoiceProfileId()
+            workflow.getVoiceProfileId(),
+            workflow.getContentType(),
+            workflow.getWritingInstructions()
         );
         workflow.recordDraftArtifacts(draftResult.draftSectionCount(), draftResult.resultPath());
         advance(workflow, WorkflowStatus.DRAFT_CREATED);

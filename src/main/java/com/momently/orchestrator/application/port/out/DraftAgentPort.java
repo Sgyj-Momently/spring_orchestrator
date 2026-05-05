@@ -19,5 +19,24 @@ public interface DraftAgentPort {
         OutlineResult outlineResult,
         String voiceProfileId
     );
-}
 
+    default DraftResult createDraft(
+        String projectId,
+        PhotoInfoResult photoInfoResult,
+        PhotoGroupingResult photoGroupingResult,
+        HeroPhotoResult heroPhotoResult,
+        OutlineResult outlineResult,
+        String voiceProfileId,
+        String contentType,
+        String writingInstructions
+    ) {
+        return createDraft(
+            projectId,
+            photoInfoResult,
+            photoGroupingResult,
+            heroPhotoResult,
+            outlineResult,
+            voiceProfileId
+        );
+    }
+}
