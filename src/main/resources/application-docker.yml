@@ -54,6 +54,7 @@ agents:
       video-frame-second: ${PHOTO_PIPELINE_VIDEO_FRAME_SECOND:1.0}
       video-frame-count: ${PHOTO_PIPELINE_VIDEO_FRAME_COUNT:3}
       video-frame-interval-seconds: ${PHOTO_PIPELINE_VIDEO_FRAME_INTERVAL_SECONDS:4.0}
+      analysis-concurrency: ${PHOTO_PIPELINE_ANALYSIS_CONCURRENCY:4}
       skip-blog: true
   photo-grouping:
     base-url: http://momently-photo-grouping:${MOMENTLY_PORT_PHOTO_GROUPING:8000}
