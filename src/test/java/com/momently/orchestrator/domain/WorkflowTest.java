@@ -66,6 +66,25 @@ class WorkflowTest {
     }
 
     @Test
+    @DisplayName("실패 후 정상 상태로 재진입하면 실패 메타데이터를 지운다")
+    void clearsFailureMetadataWhenRetryStarts() {
+        Workflow workflow = new Workflow(
+            UUID.randomUUID(),
+            "project-001",
+            "LOCATION_BASED",
+            90,
+            WorkflowStatus.PHOTO_GROUPING
+        );
+        workflow.markFailed("PHOTO_GROUPING", "timeout");
+
+        workflow.updateStatus(WorkflowStatus.PHOTO_GROUPING);
+
+        assertThat(workflow.getStatus()).isEqualTo(WorkflowStatus.PHOTO_GROUPING);
+        assertThat(workflow.getLastFailedStep()).isNull();
+        assertThat(workflow.getLastErrorMessage()).isNull();
+    }
+
+    @Test
     @DisplayName("단계별 artifact 경로와 요약 카운트를 기록한다")
     void recordsStepArtifacts() {
         Workflow workflow = new Workflow(

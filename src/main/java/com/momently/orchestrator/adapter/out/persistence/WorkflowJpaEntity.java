@@ -33,6 +33,12 @@ class WorkflowJpaEntity {
     @Column(name = "voice_profile_id")
     private String voiceProfileId;
 
+    @Column(name = "content_type")
+    private String contentType;
+
+    @Column(name = "writing_instructions", columnDefinition = "text")
+    private String writingInstructions;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private WorkflowStatus status;
@@ -88,6 +94,8 @@ class WorkflowJpaEntity {
         this.groupingStrategy = workflow.getGroupingStrategy();
         this.timeWindowMinutes = workflow.getTimeWindowMinutes();
         this.voiceProfileId = workflow.getVoiceProfileId();
+        this.contentType = workflow.getContentType();
+        this.writingInstructions = workflow.getWritingInstructions();
         this.status = workflow.getStatus();
         this.lastFailedStep = workflow.getLastFailedStep();
         this.lastErrorMessage = workflow.getLastErrorMessage();
@@ -121,6 +129,8 @@ class WorkflowJpaEntity {
             groupingStrategy,
             timeWindowMinutes,
             voiceProfileId,
+            contentType,
+            writingInstructions,
             status
         );
         if (photoCount != null || photoInfoBundlePath != null || blogPath != null) {

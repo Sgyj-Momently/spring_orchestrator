@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.momently.orchestrator.config.MomentlyUploadProperties;
 
 /**
  * 업로드 컨트롤러의 예외 응답 매핑을 검증한다.
@@ -30,7 +31,10 @@ class PhotoUploadControllerExceptionTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new PhotoUploadController(photoUploadService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new PhotoUploadController(
+            photoUploadService,
+            new MomentlyUploadProperties(40, 25_000_000, 120_000_000)
+        )).build();
     }
 
     @Test

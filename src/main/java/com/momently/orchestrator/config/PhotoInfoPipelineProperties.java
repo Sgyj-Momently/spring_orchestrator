@@ -9,38 +9,27 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 따라서 Spring 오케스트레이터는 이 설정을 통해 실행 파일, 입력/출력 루트, 모델 값을 내부적으로
  * 조립한다. 이 값들은 공개 API 계약에 노출하지 않고 운영 설정으로만 변경한다.</p>
  *
- * @param pythonExecutable 로컬 파이프라인을 실행할 Python 명령 또는 절대 경로
- * @param scriptPath 사진 정보 추출 진입점인 {@code run_pipeline.py} 경로
- * @param inputRoot 프로젝트 식별자별 사진 폴더를 찾을 상위 디렉터리
- * @param outputRoot 프로젝트 식별자별 EXIF, summary, bundle 산출물을 쓸 상위 디렉터리
- * @param ollamaBaseUrl 사진 분석과 bundle 요약에 사용할 Ollama 서버 주소
- * @param visionModel 사진별 이미지 분석에 사용할 비전 모델명
- * @param writerModel bundle 요약에 사용할 텍스트 모델명
- * @param ollamaTimeoutSeconds Ollama 호출이 멈췄을 때 실패로 전환할 타임아웃 초
- * @param ffmpegCommand 동영상 대표 프레임 추출에 사용할 ffmpeg 명령 또는 절대 경로
- * @param videoFrameSecond 동영상 첫 대표 프레임 추출 시점(초)
- * @param videoFrameCount 동영상마다 추출을 시도할 최대 대표 프레임 수
- * @param videoFrameIntervalSeconds 대표 프레임 추출 시점 사이 간격(초)
- * @param skipBlog 오케스트레이션 실행에서 선택적 블로그 생성 단계를 건너뛸지 여부
- * @param force 기존 캐시(EXIF/photo summary)를 무시하고 재생성할지 여부
+ * <p>Spring Boot 3.5에서 {@code @ConfigurationProperties} record의 컴팩트 생성자 조합 시
+ * 빈 팩토리가 무인자 생성자를 찾다 실패하는 경우가 있어, 생성자 바인딩에 안전한 불변 클래스로 둔다.</p>
  */
 @ConfigurationProperties(prefix = "agents.photo-info.pipeline")
-public record PhotoInfoPipelineProperties(
-    String pythonExecutable,
-    String scriptPath,
-    String inputRoot,
-    String outputRoot,
-    String ollamaBaseUrl,
-    String visionModel,
-    String writerModel,
-    int ollamaTimeoutSeconds,
-    String ffmpegCommand,
-    double videoFrameSecond,
-    int videoFrameCount,
-    double videoFrameIntervalSeconds,
-    boolean skipBlog,
-    boolean force
-) {
+public final class PhotoInfoPipelineProperties {
+
+    private final String pythonExecutable;
+    private final String scriptPath;
+    private final String inputRoot;
+    private final String outputRoot;
+    private final String ollamaBaseUrl;
+    private final String visionModel;
+    private final String writerModel;
+    private final int ollamaTimeoutSeconds;
+    private final String ffmpegCommand;
+    private final double videoFrameSecond;
+    private final int videoFrameCount;
+    private final double videoFrameIntervalSeconds;
+    private final int analysisConcurrency;
+    private final boolean skipBlog;
+    private final boolean force;
 
     public PhotoInfoPipelineProperties(
         String pythonExecutable,
@@ -51,54 +40,109 @@ public record PhotoInfoPipelineProperties(
         String visionModel,
         String writerModel,
         int ollamaTimeoutSeconds,
+        String ffmpegCommand,
+        double videoFrameSecond,
+        int videoFrameCount,
+        double videoFrameIntervalSeconds,
+        int analysisConcurrency,
         boolean skipBlog,
         boolean force
     ) {
-        this(
-            pythonExecutable,
-            scriptPath,
-            inputRoot,
-            outputRoot,
-            ollamaBaseUrl,
-            visionModel,
-            writerModel,
-            ollamaTimeoutSeconds,
-            null,
-            0.0,
-            0,
-            0.0,
-            skipBlog,
-            force
-        );
+        this.pythonExecutable = defaultIfBlank(pythonExecutable, "python3");
+        this.scriptPath = defaultIfBlank(scriptPath, "../photo_exif_llm_pipeline/src/run_pipeline.py");
+        this.inputRoot = defaultIfBlank(inputRoot, "../photo_exif_llm_pipeline/input_photos");
+        this.outputRoot = defaultIfBlank(outputRoot, "../photo_exif_llm_pipeline/output/orchestrator");
+        this.ollamaBaseUrl = defaultIfBlank(ollamaBaseUrl, "http://localhost:11434");
+        this.visionModel = defaultIfBlank(visionModel, "qwen2.5vl:7b");
+        this.writerModel = defaultIfBlank(writerModel, "qwen2.5:14b");
+        int timeout = ollamaTimeoutSeconds;
+        if (timeout <= 0) {
+            timeout = 180;
+        }
+        this.ollamaTimeoutSeconds = timeout;
+        this.ffmpegCommand = defaultIfBlank(ffmpegCommand, "ffmpeg");
+        double vfs = videoFrameSecond;
+        if (vfs <= 0.0) {
+            vfs = 1.0;
+        }
+        this.videoFrameSecond = vfs;
+        int vfc = videoFrameCount;
+        if (vfc <= 0) {
+            vfc = 3;
+        }
+        this.videoFrameCount = vfc;
+        double vfi = videoFrameIntervalSeconds;
+        if (vfi <= 0.0) {
+            vfi = 4.0;
+        }
+        this.videoFrameIntervalSeconds = vfi;
+        int concurrency = analysisConcurrency;
+        if (concurrency <= 0) {
+            concurrency = 4;
+        }
+        this.analysisConcurrency = Math.min(concurrency, 16);
+        this.skipBlog = skipBlog;
+        this.force = force;
     }
 
-    /**
-     * 비어 있는 설정값에 로컬 개발 기본값을 채운다.
-     *
-     * <p>테스트와 로컬 실행에서 설정을 모두 적지 않아도 Spring context가 뜰 수 있게 하기 위한
-     * 방어적 기본값이다. 운영 환경에서는 배포 경로와 모델명을 명시적으로 덮어쓰는 것을 권장한다.</p>
-     */
-    public PhotoInfoPipelineProperties {
-        pythonExecutable = defaultIfBlank(pythonExecutable, "python3");
-        scriptPath = defaultIfBlank(scriptPath, "../photo_exif_llm_pipeline/src/run_pipeline.py");
-        inputRoot = defaultIfBlank(inputRoot, "../photo_exif_llm_pipeline/input_photos");
-        outputRoot = defaultIfBlank(outputRoot, "../photo_exif_llm_pipeline/output/orchestrator");
-        ollamaBaseUrl = defaultIfBlank(ollamaBaseUrl, "http://localhost:11434");
-        visionModel = defaultIfBlank(visionModel, "qwen2.5vl:7b");
-        writerModel = defaultIfBlank(writerModel, "qwen2.5:14b");
-        if (ollamaTimeoutSeconds <= 0) {
-            ollamaTimeoutSeconds = 180;
-        }
-        ffmpegCommand = defaultIfBlank(ffmpegCommand, "ffmpeg");
-        if (videoFrameSecond <= 0.0) {
-            videoFrameSecond = 1.0;
-        }
-        if (videoFrameCount <= 0) {
-            videoFrameCount = 3;
-        }
-        if (videoFrameIntervalSeconds <= 0.0) {
-            videoFrameIntervalSeconds = 4.0;
-        }
+    public String pythonExecutable() {
+        return pythonExecutable;
+    }
+
+    public String scriptPath() {
+        return scriptPath;
+    }
+
+    public String inputRoot() {
+        return inputRoot;
+    }
+
+    public String outputRoot() {
+        return outputRoot;
+    }
+
+    public String ollamaBaseUrl() {
+        return ollamaBaseUrl;
+    }
+
+    public String visionModel() {
+        return visionModel;
+    }
+
+    public String writerModel() {
+        return writerModel;
+    }
+
+    public int ollamaTimeoutSeconds() {
+        return ollamaTimeoutSeconds;
+    }
+
+    public String ffmpegCommand() {
+        return ffmpegCommand;
+    }
+
+    public double videoFrameSecond() {
+        return videoFrameSecond;
+    }
+
+    public int videoFrameCount() {
+        return videoFrameCount;
+    }
+
+    public double videoFrameIntervalSeconds() {
+        return videoFrameIntervalSeconds;
+    }
+
+    public int analysisConcurrency() {
+        return analysisConcurrency;
+    }
+
+    public boolean skipBlog() {
+        return skipBlog;
+    }
+
+    public boolean force() {
+        return force;
     }
 
     private static String defaultIfBlank(String value, String defaultValue) {

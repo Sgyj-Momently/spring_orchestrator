@@ -25,7 +25,8 @@ public class StubDraftAgentAdapter implements DraftAgentPort {
         PhotoInfoResult photoInfoResult,
         PhotoGroupingResult photoGroupingResult,
         HeroPhotoResult heroPhotoResult,
-        OutlineResult outlineResult
+        OutlineResult outlineResult,
+        String voiceProfileId
     ) {
         Path path = Path.of("output/%s/draft/draft.json".formatted(projectId));
         int sectionCount = Math.max(1, outlineResult.outlineSectionCount());

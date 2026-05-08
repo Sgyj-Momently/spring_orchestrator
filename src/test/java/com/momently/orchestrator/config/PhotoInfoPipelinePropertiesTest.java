@@ -6,7 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 사진 정보 파이프라인 설정 record를 검증한다.
+ * 사진 정보 파이프라인 설정을 검증한다.
  */
 class PhotoInfoPipelinePropertiesTest {
 
@@ -21,6 +21,11 @@ class PhotoInfoPipelinePropertiesTest {
             null,
             null,
             null,
+            0,
+            null,
+            0.0,
+            0,
+            0.0,
             0,
             true,
             false
@@ -38,6 +43,7 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.videoFrameSecond()).isEqualTo(1.0);
         assertThat(properties.videoFrameCount()).isEqualTo(3);
         assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(4.0);
+        assertThat(properties.analysisConcurrency()).isEqualTo(4);
         assertThat(properties.skipBlog()).isTrue();
         assertThat(properties.force()).isFalse();
     }
@@ -58,6 +64,7 @@ class PhotoInfoPipelinePropertiesTest {
             2.5,
             5,
             6.5,
+            6,
             false,
             true
         );
@@ -74,7 +81,32 @@ class PhotoInfoPipelinePropertiesTest {
         assertThat(properties.videoFrameSecond()).isEqualTo(2.5);
         assertThat(properties.videoFrameCount()).isEqualTo(5);
         assertThat(properties.videoFrameIntervalSeconds()).isEqualTo(6.5);
+        assertThat(properties.analysisConcurrency()).isEqualTo(6);
         assertThat(properties.skipBlog()).isFalse();
         assertThat(properties.force()).isTrue();
+    }
+
+    @Test
+    @DisplayName("분석 병렬도는 과도한 값이면 상한으로 제한한다")
+    void capsAnalysisConcurrency() {
+        PhotoInfoPipelineProperties properties = new PhotoInfoPipelineProperties(
+            "python",
+            "/workspace/run_pipeline.py",
+            "/input",
+            "/output",
+            "http://ollama.test",
+            "qwen2.5vl:7b",
+            "gemma4",
+            60,
+            "/usr/bin/ffmpeg",
+            2.5,
+            5,
+            6.5,
+            99,
+            false,
+            true
+        );
+
+        assertThat(properties.analysisConcurrency()).isEqualTo(16);
     }
 }

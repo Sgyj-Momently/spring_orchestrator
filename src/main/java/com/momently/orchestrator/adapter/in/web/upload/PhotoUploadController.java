@@ -1,10 +1,12 @@
 package com.momently.orchestrator.adapter.in.web.upload;
 
+import com.momently.orchestrator.config.MomentlyUploadProperties;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -21,9 +23,24 @@ import org.springframework.web.multipart.MultipartFile;
 public class PhotoUploadController {
 
     private final PhotoUploadService photoUploadService;
+    private final MomentlyUploadProperties uploadProperties;
 
-    public PhotoUploadController(PhotoUploadService photoUploadService) {
+    public PhotoUploadController(PhotoUploadService photoUploadService, MomentlyUploadProperties uploadProperties) {
         this.photoUploadService = photoUploadService;
+        this.uploadProperties = uploadProperties;
+    }
+
+    /**
+     * 콘솔 화면 검증에 필요한 현재 서버 업로드 정책을 반환한다.
+     */
+    @GetMapping("/config")
+    public ResponseEntity<PhotoUploadConfigResponse> uploadConfig() {
+        return ResponseEntity.ok(new PhotoUploadConfigResponse(
+            uploadProperties.maxFiles(),
+            uploadProperties.maxBytesPerFile(),
+            uploadProperties.maxTotalBytes(),
+            PhotoUploadService.ALLOWED_EXTENSIONS
+        ));
     }
 
     /**

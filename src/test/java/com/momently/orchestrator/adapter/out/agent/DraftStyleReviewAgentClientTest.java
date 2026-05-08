@@ -75,7 +75,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(1, bundle.toString()),
             new PhotoGroupingResult("LOCATION_BASED", 1, grouping.toString()),
             new HeroPhotoResult(1, hero.toString()),
-            new OutlineResult(1, outline.toString())
+            new OutlineResult(1, outline.toString()),
+            null
         );
 
         assertThat(result.draftSectionCount()).isEqualTo(1);
@@ -197,7 +198,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(0, bundle.toString()),
             new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
             new HeroPhotoResult(0, hero.toString()),
-            new OutlineResult(0, outline.toString())
+            new OutlineResult(0, outline.toString()),
+            null
         );
         assertThat(draft.draftSectionCount()).isZero();
         draftServer.verify();
@@ -272,7 +274,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(0, bundle.toString()),
             new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
             new HeroPhotoResult(0, hero.toString()),
-            new OutlineResult(0, outline.toString())
+            new OutlineResult(0, outline.toString()),
+            null
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("draft_status is not ok");
@@ -399,7 +402,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(0, bundle.toString()),
             new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
             new HeroPhotoResult(0, hero.toString()),
-            new OutlineResult(0, outline.toString())
+            new OutlineResult(0, outline.toString()),
+            null
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Draft agent call failed")
@@ -456,7 +460,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(0, bundle.toString()),
             new PhotoGroupingResult("TIME_BASED", 0, grouping.toString()),
             new HeroPhotoResult(0, hero.toString()),
-            new OutlineResult(0, outline.toString())
+            new OutlineResult(0, outline.toString()),
+            null
         );
 
         assertThat(result.draftSectionCount()).isEqualTo(1);
@@ -476,7 +481,8 @@ class DraftStyleReviewAgentClientTest {
             new PhotoInfoResult(0, tempDir.resolve("missing-bundle.json").toString()),
             new PhotoGroupingResult("TIME_BASED", 0, tempDir.resolve("missing-grouping.json").toString()),
             new HeroPhotoResult(0, tempDir.resolve("missing-hero.json").toString()),
-            new OutlineResult(0, tempDir.resolve("missing-outline.json").toString())
+            new OutlineResult(0, tempDir.resolve("missing-outline.json").toString()),
+            null
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Failed to read json artifact");

@@ -42,6 +42,8 @@ public class WorkflowService implements CreateWorkflowUseCase, GetWorkflowUseCas
             command.groupingStrategy(),
             command.timeWindowMinutes(),
             command.voiceProfileId(),
+            command.contentType(),
+            command.writingInstructions(),
             WorkflowStatus.CREATED
         );
         return workflowRepository.save(workflow);

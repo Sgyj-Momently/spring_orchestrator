@@ -64,6 +64,8 @@ class LocalPhotoInfoPipelineAdapterTest {
             "3",
             "--video-frame-interval-seconds",
             "4.0",
+            "--analysis-concurrency",
+            "4",
             "--skip-blog"
         );
         assertThat(result.photoCount()).isEqualTo(7);
@@ -131,7 +133,7 @@ class LocalPhotoInfoPipelineAdapterTest {
 
         assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Photo info bundle not found");
+            .hasMessageContaining("분석 결과 파일을 생성하지 못했습니다");
     }
 
     @Test
@@ -148,7 +150,7 @@ class LocalPhotoInfoPipelineAdapterTest {
 
         assertThatThrownBy(() -> adapter.extractPhotoInfo("project-001"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Photo input directory");
+            .hasMessageContaining("업로드된 사진/동영상 묶음을 찾을 수 없습니다");
     }
 
     @Test
@@ -305,6 +307,11 @@ class LocalPhotoInfoPipelineAdapterTest {
                 "qwen2.5vl:7b",
                 "gemma4",
                 60,
+                "ffmpeg",
+                1.0,
+                3,
+                4.0,
+                4,
                 true,
                 false
             ),
@@ -337,6 +344,11 @@ class LocalPhotoInfoPipelineAdapterTest {
                 "qwen2.5vl:7b",
                 "gemma4",
                 60,
+                "ffmpeg",
+                1.0,
+                3,
+                4.0,
+                4,
                 true,
                 false
             ),
@@ -378,6 +390,11 @@ class LocalPhotoInfoPipelineAdapterTest {
                 "qwen2.5vl:7b",
                 "gemma4",
                 60,
+                "ffmpeg",
+                1.0,
+                3,
+                4.0,
+                4,
                 true,
                 false
             ),
@@ -402,6 +419,11 @@ class LocalPhotoInfoPipelineAdapterTest {
             "qwen2.5vl:7b",
             "gemma4",
             60,
+            "ffmpeg",
+            1.0,
+            3,
+            4.0,
+            4,
             skipBlog,
             false
         );

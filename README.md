@@ -40,6 +40,7 @@ spring_orchestrator/
 - 기본 저장소는 `memory` 프로필의 `InMemoryWorkflowRepository`다.
 - `stub-agents` 프로필에서는 실제 에이전트 HTTP 연동 전까지 stub outbound adapter로 실행 흐름을 검증한다.
 - `local-photo-info` 프로필에서는 `LocalPhotoInfoPipelineAdapter`가 CLI 기반 사진 정보 추출 파이프라인을 실행한다.
+- 업로드 API는 사진과 `mp4`, `mov`, `m4v` 동영상을 프로젝트 입력 폴더에 저장한다.
 - `stub-agents`가 꺼진 프로필에서는 `PhotoGroupingAgentClient`가 FastAPI 그룹화 에이전트를 HTTP로 호출한다.
 - `postgres` 프로필용 JPA persistence adapter가 추가되어 있다.
 - 테스트와 JaCoCo 커버리지 검증이 통과한다.
@@ -67,6 +68,8 @@ env GRADLE_USER_HOME=.gradle-home GRADLE_OPTS='-Dorg.gradle.native=false' gradle
 사진 정보 bundle에 `exclude_from_public_outputs=true`가 붙은 사진은 그룹화 에이전트 요청에서 제외한다.
 신분증, 주민등록번호, 면허번호, 상세 주소 등은 `photo_exif_llm_pipeline`에서 감지해 마스킹하고
 `excluded_photos`에 최소 기록만 남긴다.
+동영상은 파이프라인에서 `ffmpeg`로 여러 대표 프레임을 추출하고, 각 프레임 분석 결과를 동영상 단위 요약으로 병합한다.
+사진과 동영상 대표 프레임 분석은 병렬로 처리하며, Docker에서는 `PHOTO_PIPELINE_ANALYSIS_CONCURRENCY`로 동시 실행 수를 조절한다.
 
 워크플로 실행 결과는 응답에 주요 artifact 경로를 함께 노출한다.
 

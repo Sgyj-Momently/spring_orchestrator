@@ -31,7 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class PhotoUploadService {
 
-    private static final Set<String> ALLOWED_EXT = Set.of(
+    public static final List<String> ALLOWED_EXTENSIONS = List.of(
         "jpg",
         "jpeg",
         "png",
@@ -42,6 +42,7 @@ public class PhotoUploadService {
         "mov",
         "m4v"
     );
+    private static final Set<String> ALLOWED_EXT = Set.copyOf(ALLOWED_EXTENSIONS);
 
     private final PhotoInfoPipelineProperties pipelineProperties;
     private final MomentlyUploadProperties uploadProperties;

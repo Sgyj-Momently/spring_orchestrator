@@ -29,7 +29,8 @@ class StubLateStageAgentAdapterTest {
             new PhotoInfoResult(2, "bundle.json"),
             new PhotoGroupingResult("TIME_BASED", 1, "grouping.json"),
             new HeroPhotoResult(1, "hero.json"),
-            new OutlineResult(2, "outline.json")
+            new OutlineResult(2, "outline.json"),
+            null
         );
         StyleResult style = styleAdapter.applyStyle("project-001", draft, null);
         ReviewResult review = reviewAdapter.reviewDocument("project-001", new PhotoInfoResult(2, "bundle.json"), style);
