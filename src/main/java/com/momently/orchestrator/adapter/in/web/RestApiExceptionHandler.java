@@ -1,5 +1,6 @@
 package com.momently.orchestrator.adapter.in.web;
 
+import java.io.IOException;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,5 +34,17 @@ public class RestApiExceptionHandler {
             .orElse("request");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(Map.of("error", field + " 값을 확인해 주세요."));
+    }
+
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Map<String, String>> handleIo(IOException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(Map.of("error", "파일을 읽거나 저장하지 못했습니다."));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(Map.of("error", "서버가 요청을 처리할 준비가 되지 않았습니다."));
     }
 }

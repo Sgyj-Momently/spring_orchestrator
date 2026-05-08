@@ -2,6 +2,7 @@ package com.momently.orchestrator.adapter.in.web.upload;
 
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import com.momently.orchestrator.security.JwtService;
+import com.momently.orchestrator.config.MomentlyUploadProperties;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,7 +32,26 @@ class PhotoUploadControllerTest {
     private PhotoUploadService photoUploadService;
 
     @MockBean
+    private MomentlyUploadProperties uploadProperties;
+
+    @MockBean
     private JwtService jwtService;
+
+    @Test
+    @DisplayName("업로드 설정 조회 시 서버 제한과 지원 확장자를 반환한다")
+    void returnsUploadConfig() throws Exception {
+        when(uploadProperties.maxFiles()).thenReturn(12);
+        when(uploadProperties.maxBytesPerFile()).thenReturn(1_000_000L);
+        when(uploadProperties.maxTotalBytes()).thenReturn(8_000_000L);
+
+        mockMvc.perform(get("/api/v1/uploads/config"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.maxFiles").value(12))
+            .andExpect(jsonPath("$.maxBytesPerFile").value(1_000_000L))
+            .andExpect(jsonPath("$.maxTotalBytes").value(8_000_000L))
+            .andExpect(jsonPath("$.allowedExtensions[0]").value("jpg"))
+            .andExpect(jsonPath("$.allowedExtensions").isArray());
+    }
 
     @Test
     @DisplayName("멀티파트 미디어 업로드가 성공하면 프로젝트 식별자를 반환한다")

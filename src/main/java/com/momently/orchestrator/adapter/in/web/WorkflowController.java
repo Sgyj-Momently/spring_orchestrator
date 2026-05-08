@@ -278,7 +278,8 @@ public class WorkflowController {
         }
         String draftResultPath = workflow.getDraftResultPath();
         if (draftResultPath == null || draftResultPath.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "문체를 다시 적용하려면 초안 아티팩트가 필요합니다."));
         }
 
         String effectiveVoiceProfileId = request != null && request.voiceProfileId() != null
@@ -445,7 +446,7 @@ public class WorkflowController {
             || fileName.contains("/")
             || fileName.contains("\\")
             || fileName.contains("..")) {
-            return ResponseEntity.badRequest().build();
+            throw new IllegalArgumentException("파일 이름이 올바르지 않습니다.");
         }
 
         Path projectRoot = Path.of(photoInfoPipelineProperties.inputRoot())

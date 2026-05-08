@@ -125,7 +125,7 @@ class WorkflowControllerTest {
                 .content("""
                     {
                       "projectId": "",
-                      "groupingStrategy": ""
+                      "groupingStrategy": "TIME_BASED"
                     }
                     """))
             .andExpect(status().isBadRequest())
@@ -295,6 +295,22 @@ class WorkflowControllerTest {
             .andExpect(jsonPath("$.workflowId").value(workflowId.toString()));
 
         verify(workflowRepository, timeout(1000).atLeastOnce()).save(workflow);
+    }
+
+    @Test
+    @DisplayName("초안 아티팩트가 없는 워크플로 문체 재적용은 JSON 400으로 거절한다")
+    void rejectsRestyleWithoutDraftArtifact() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f45");
+        Workflow workflow = new Workflow(workflowId, "project-restyle-no-draft", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/restyle", workflowId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("문체를 다시 적용하려면 초안 아티팩트가 필요합니다."));
+
+        verify(styleAgentPort, never()).applyStyle(any(), any(), any());
     }
 
     @Test
@@ -474,7 +490,8 @@ class WorkflowControllerTest {
         when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
 
         mockMvc.perform(get("/api/v1/workflows/{workflowId}/files/{fileName}", workflowId, "..%2Fsecret.jpg"))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("파일 이름이 올바르지 않습니다."));
     }
 
     @ParameterizedTest
