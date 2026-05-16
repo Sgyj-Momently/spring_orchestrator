@@ -1,5 +1,6 @@
 package com.momently.orchestrator.adapter.in.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -15,11 +16,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.momently.orchestrator.application.port.in.CreateWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.GetWorkflowUseCase;
 import com.momently.orchestrator.application.port.in.RunWorkflowUseCase;
+import com.momently.orchestrator.application.port.in.command.CreateWorkflowCommand;
 import com.momently.orchestrator.application.port.out.ReviewAgentPort;
 import com.momently.orchestrator.application.port.out.StyleAgentPort;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
+import com.momently.orchestrator.config.MomentlyArtifactProperties;
 import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.application.service.WorkflowStateMachine;
@@ -28,16 +31,18 @@ import com.momently.orchestrator.domain.WorkflowStatus;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,39 +58,47 @@ class WorkflowControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private CreateWorkflowUseCase createWorkflowUseCase;
 
-    @MockBean
+    @MockitoBean
     private GetWorkflowUseCase getWorkflowUseCase;
 
-    @MockBean
+    @MockitoBean
     private RunWorkflowUseCase runWorkflowUseCase;
 
     /** 슬라이스에 보안 빈 체인이 올라가므로 JwtService만 모의로 채운다. */
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
+    private MomentlyArtifactProperties artifactProperties;
+
+    @MockitoBean
     private PhotoInfoPipelineProperties photoInfoPipelineProperties;
 
-    @MockBean
+    @MockitoBean
     private StyleAgentPort styleAgentPort;
 
-    @MockBean
+    @MockitoBean
     private ReviewAgentPort reviewAgentPort;
 
-    @MockBean
+    @MockitoBean
     private WorkflowRepository workflowRepository;
 
-    @MockBean
+    @MockitoBean
     private WorkflowSseEventPublisher workflowSseEventPublisher;
 
-    @MockBean
+    @MockitoBean
     private WorkflowStateMachine workflowStateMachine;
 
     @TempDir
     Path tempDir;
+
+    @BeforeEach
+    void setUpArtifactRetention() {
+        when(artifactProperties.maxEditVersions()).thenReturn(20);
+    }
 
     @Test
     @DisplayName("워크플로 생성 요청을 받아 HATEOAS 응답을 반환한다")
@@ -96,6 +109,9 @@ class WorkflowControllerTest {
             "project-001",
             "LOCATION_BASED",
             90,
+            "voice-friendly",
+            "체험단",
+            "상호명을 자연스럽게 포함",
             WorkflowStatus.CREATED
         );
         when(createWorkflowUseCase.createWorkflow(any())).thenReturn(workflow);
@@ -105,16 +121,27 @@ class WorkflowControllerTest {
                 .content("""
                     {
                       "projectId": "project-001",
-                      "groupingStrategy": "LOCATION_BASED"
+                      "groupingStrategy": "LOCATION_BASED",
+                      "voiceProfileId": "voice-friendly",
+                      "contentType": "체험단",
+                      "writingInstructions": "상호명을 자연스럽게 포함"
                     }
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workflowId").value(workflowId.toString()))
             .andExpect(jsonPath("$.projectId").value("project-001"))
             .andExpect(jsonPath("$.groupingStrategy").value("LOCATION_BASED"))
+            .andExpect(jsonPath("$.contentType").value("체험단"))
+            .andExpect(jsonPath("$.writingInstructions").value("상호명을 자연스럽게 포함"))
             .andExpect(jsonPath("$.status").value("CREATED"))
             .andExpect(jsonPath("$._links.self.href").exists())
             .andExpect(jsonPath("$._links.run.href").exists());
+
+        ArgumentCaptor<CreateWorkflowCommand> commandCaptor = ArgumentCaptor.forClass(CreateWorkflowCommand.class);
+        verify(createWorkflowUseCase).createWorkflow(commandCaptor.capture());
+        assertThat(commandCaptor.getValue().voiceProfileId()).isEqualTo("voice-friendly");
+        assertThat(commandCaptor.getValue().contentType()).isEqualTo("체험단");
+        assertThat(commandCaptor.getValue().writingInstructions()).isEqualTo("상호명을 자연스럽게 포함");
     }
 
     @Test
@@ -214,6 +241,17 @@ class WorkflowControllerTest {
     }
 
     @Test
+    @DisplayName("워크플로 기록 한 건을 삭제한다")
+    void deletesWorkflow() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f45");
+
+        mockMvc.perform(delete("/api/v1/workflows/{workflowId}", workflowId))
+            .andExpect(status().isNoContent());
+
+        verify(getWorkflowUseCase).deleteWorkflow(workflowId);
+    }
+
+    @Test
     @DisplayName("워크플로 실행 요청을 받아 202 Accepted와 상태 조회용 Location 헤더를 반환한다")
     void runsWorkflow() throws Exception {
         UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f12");
@@ -240,6 +278,38 @@ class WorkflowControllerTest {
             .andExpect(jsonPath("$.status").value("already_running"));
 
         verify(runWorkflowUseCase, never()).runWorkflow(workflowId);
+    }
+
+    @Test
+    @DisplayName("완료된 워크플로 실행 요청은 중복 실행하지 않고 멱등 응답한다")
+    void runWorkflowIsIdempotentWhenCompleted() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f47");
+        Workflow workflow = new Workflow(workflowId, "project-completed", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
+            .andExpect(status().isAccepted())
+            .andExpect(header().exists("Location"))
+            .andExpect(jsonPath("$.status").value("already_completed"))
+            .andExpect(jsonPath("$.workflowId").value(workflowId.toString()));
+
+        verify(runWorkflowUseCase, never()).runWorkflow(workflowId);
+    }
+
+    @Test
+    @DisplayName("실패한 워크플로는 run 엔드포인트로도 재실행할 수 있다")
+    void runsFailedWorkflowAgain() throws Exception {
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f48");
+        Workflow workflow = new Workflow(workflowId, "project-failed-run", "TIME_BASED", 90, WorkflowStatus.FAILED);
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/run", workflowId))
+            .andExpect(status().isAccepted())
+            .andExpect(header().exists("Location"))
+            .andExpect(jsonPath("$.status").value("started"))
+            .andExpect(jsonPath("$.workflowId").value(workflowId.toString()));
+
+        verify(runWorkflowUseCase).runWorkflow(workflowId);
     }
 
     @Test
@@ -371,6 +441,35 @@ class WorkflowControllerTest {
             org.assertj.core.api.Assertions.assertThat(editFiles
                 .filter(path -> path.getFileName().toString().matches("review-\\d{17}\\.md"))
                 .count()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("artifact 수정본은 설정된 버전 수만 보존하고 latest 파일은 유지한다")
+    void prunesOldArtifactEditVersions() throws Exception {
+        when(artifactProperties.maxEditVersions()).thenReturn(2);
+        UUID workflowId = UUID.fromString("01964e72-4f4b-7d35-9a07-f9c7ef4b0f46");
+        Path reviewDir = Files.createDirectories(tempDir.resolve("review-retention"));
+        Path finalPath = reviewDir.resolve("final.json");
+        Path editsDir = Files.createDirectories(reviewDir.resolve("edits"));
+        Files.writeString(finalPath, "{\"final_markdown\":\"# 원본\"}");
+        Files.writeString(editsDir.resolve("review-20260509000000000.md"), "# old-1");
+        Files.writeString(editsDir.resolve("review-20260509000000001.md"), "# old-2");
+        Workflow workflow = new Workflow(workflowId, "project-edit-retention", "TIME_BASED", 90, WorkflowStatus.COMPLETED);
+        workflow.recordReviewArtifacts(0, finalPath.toString());
+        when(getWorkflowUseCase.getWorkflow(workflowId)).thenReturn(workflow);
+
+        mockMvc.perform(post("/api/v1/workflows/{workflowId}/artifacts/review/edits", workflowId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"markdown\":\"# 새 수정본\"}"))
+            .andExpect(status().isOk());
+
+        assertThat(Files.exists(editsDir.resolve("review-latest.md"))).isTrue();
+        assertThat(Files.exists(editsDir.resolve("review-20260509000000000.md"))).isFalse();
+        try (var editFiles = Files.list(editsDir)) {
+            assertThat(editFiles
+                .filter(path -> path.getFileName().toString().matches("review-\\d{17}\\.md"))
+                .count()).isEqualTo(2);
         }
     }
 

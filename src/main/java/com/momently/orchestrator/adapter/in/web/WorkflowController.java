@@ -18,6 +18,7 @@ import com.momently.orchestrator.application.port.out.result.StyleResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momently.orchestrator.application.port.out.WorkflowRepository;
+import com.momently.orchestrator.config.MomentlyArtifactProperties;
 import com.momently.orchestrator.config.PhotoInfoPipelineProperties;
 import com.momently.orchestrator.domain.Workflow;
 import com.momently.orchestrator.domain.WorkflowStatus;
@@ -30,6 +31,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -80,6 +82,7 @@ public class WorkflowController {
     private final GetWorkflowUseCase getWorkflowUseCase;
     private final RunWorkflowUseCase runWorkflowUseCase;
     private final ObjectMapper objectMapper;
+    private final MomentlyArtifactProperties artifactProperties;
     private final PhotoInfoPipelineProperties photoInfoPipelineProperties;
     private final StyleAgentPort styleAgentPort;
     private final ReviewAgentPort reviewAgentPort;
@@ -102,6 +105,7 @@ public class WorkflowController {
         GetWorkflowUseCase getWorkflowUseCase,
         RunWorkflowUseCase runWorkflowUseCase,
         ObjectMapper objectMapper,
+        MomentlyArtifactProperties artifactProperties,
         PhotoInfoPipelineProperties photoInfoPipelineProperties,
         StyleAgentPort styleAgentPort,
         ReviewAgentPort reviewAgentPort,
@@ -113,6 +117,7 @@ public class WorkflowController {
         this.getWorkflowUseCase = getWorkflowUseCase;
         this.runWorkflowUseCase = runWorkflowUseCase;
         this.objectMapper = objectMapper;
+        this.artifactProperties = artifactProperties;
         this.photoInfoPipelineProperties = photoInfoPipelineProperties;
         this.styleAgentPort = styleAgentPort;
         this.reviewAgentPort = reviewAgentPort;
@@ -186,6 +191,17 @@ public class WorkflowController {
     @DeleteMapping
     public ResponseEntity<Void> deleteWorkflowHistory() {
         getWorkflowUseCase.deleteAllWorkflows();
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 콘솔 작업 기록 한 건을 삭제한다.
+     *
+     * <p>워크플로 메타데이터만 삭제하며, 이미 생성된 산출물 파일은 건드리지 않는다.</p>
+     */
+    @DeleteMapping("/{workflowId}")
+    public ResponseEntity<Void> deleteWorkflow(@PathVariable UUID workflowId) {
+        getWorkflowUseCase.deleteWorkflow(workflowId);
         return ResponseEntity.noContent().build();
     }
 
@@ -390,6 +406,7 @@ public class WorkflowController {
         Path latestPath = editsDir.resolve(normalizedType + "-latest.md");
         Files.writeString(versionPath, request.markdown());
         Files.writeString(latestPath, request.markdown());
+        pruneOldArtifactEditVersions(editsDir, normalizedType);
 
         return ResponseEntity.ok(new WorkflowArtifactResponse(
             artifactType,
@@ -498,6 +515,36 @@ public class WorkflowController {
 
     private static String normalizeArtifactType(String artifactType) {
         return artifactType.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9-]", "-");
+    }
+
+    private void pruneOldArtifactEditVersions(Path editsDir, String normalizedType) throws IOException {
+        int maxVersions = artifactProperties.maxEditVersions();
+        if (maxVersions <= 0) {
+            try (var paths = Files.list(editsDir)) {
+                for (Path path : paths
+                    .filter(candidate -> isVersionedEditPath(candidate, normalizedType))
+                    .toList()) {
+                    Files.deleteIfExists(path);
+                }
+            }
+            return;
+        }
+
+        try (var paths = Files.list(editsDir)) {
+            List<Path> versions = paths
+                .filter(candidate -> isVersionedEditPath(candidate, normalizedType))
+                .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                .toList();
+            int deleteCount = Math.max(0, versions.size() - maxVersions);
+            for (int i = 0; i < deleteCount; i++) {
+                Files.deleteIfExists(versions.get(i));
+            }
+        }
+    }
+
+    private static boolean isVersionedEditPath(Path path, String normalizedType) {
+        String name = path.getFileName().toString();
+        return name.matches(java.util.regex.Pattern.quote(normalizedType) + "-\\d{17}\\.md");
     }
 
     private EntityModel<WorkflowResponse> toModel(Workflow workflow) {
