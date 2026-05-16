@@ -51,4 +51,19 @@ class InMemoryWorkflowRepositoryTest {
 
         assertThat(repository.findAll()).isEmpty();
     }
+
+    @Test
+    @DisplayName("저장된 워크플로 한 건만 삭제한다")
+    void deletesWorkflowById() {
+        InMemoryWorkflowRepository repository = new InMemoryWorkflowRepository();
+        Workflow first = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.CREATED);
+        Workflow second = new Workflow(UUID.randomUUID(), "project-002", "TIME_BASED", 90, WorkflowStatus.CREATED);
+        repository.save(first);
+        repository.save(second);
+
+        repository.deleteById(first.getWorkflowId());
+
+        assertThat(repository.findById(first.getWorkflowId())).isEmpty();
+        assertThat(repository.findAll()).containsExactly(second);
+    }
 }

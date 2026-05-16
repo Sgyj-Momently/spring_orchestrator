@@ -373,5 +373,10 @@ class WorkflowRunnerTest {
         public void deleteAll() {
             storage.clear();
         }
+
+        @Override
+        public void deleteById(UUID workflowId) {
+            storage.remove(workflowId);
+        }
     }
 }

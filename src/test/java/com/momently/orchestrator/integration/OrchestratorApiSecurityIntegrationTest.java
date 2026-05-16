@@ -62,6 +62,7 @@ class OrchestratorApiSecurityIntegrationTest {
                     throw new IllegalStateException(exception);
                 }
             });
+        registry.add("momently.security.signup-invite-code", () -> "integration-invite");
     }
 
     @Autowired
@@ -152,6 +153,29 @@ class OrchestratorApiSecurityIntegrationTest {
                     """))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    @DisplayName("회원가입 엔드포인트는 인증 없이 계정을 만들고 발급 토큰으로 보호 경로에 접근한다")
+    void registerThenAccessProtectedRoute() throws Exception {
+        String username = "member-" + UUID.randomUUID().toString().substring(0, 8);
+        MvcResult registered = mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"%s","password":"member-password","inviteCode":"integration-invite"}
+                    """.formatted(username)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").exists())
+            .andReturn();
+
+        String token = MAPPER.readTree(registered.getResponse().getContentAsString())
+            .get("accessToken")
+            .asText();
+
+        mockMvc.perform(get("/api/v1/uploads/config")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.maxFiles").exists());
     }
 
     @Test

@@ -24,10 +24,13 @@ momently:
     password: changeme
     jwt-secret: local-dev-console-jwt-signing-secret-min32b
     jwt-expiration-seconds: 86400
+    signup-invite-code: ""
   upload:
     max-files: 40
     max-bytes-per-file: 26214400
     max-total-bytes: 125829120
+  artifacts:
+    max-edit-versions: 20
 
 logging:
   level:
@@ -35,6 +38,11 @@ logging:
     org.springframework.web.client: INFO
 
 agents:
+  http:
+    connect-timeout-seconds: 5
+    read-timeout-seconds: 300
+    max-attempts: 2
+    backoff-millis: 250
   photo-info:
     pipeline:
       python-executable: python3

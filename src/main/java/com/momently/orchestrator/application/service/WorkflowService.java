@@ -66,6 +66,12 @@ public class WorkflowService implements CreateWorkflowUseCase, GetWorkflowUseCas
     }
 
     @Override
+    public void deleteWorkflow(UUID workflowId) {
+        getWorkflow(workflowId);
+        workflowRepository.deleteById(workflowId);
+    }
+
+    @Override
     public Workflow advanceWorkflow(UUID workflowId, WorkflowStatus nextStatus) {
         Workflow workflow = getWorkflow(workflowId);
         workflowStateMachine.transition(workflow, nextStatus);

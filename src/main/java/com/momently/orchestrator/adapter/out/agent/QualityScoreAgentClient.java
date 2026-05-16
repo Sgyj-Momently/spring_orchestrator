@@ -8,12 +8,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.momently.orchestrator.application.port.out.QualityScoreAgentPort;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.application.port.out.result.QualityScoreResult;
+import com.momently.orchestrator.config.AgentHttpClientProperties;
 import com.momently.orchestrator.config.QualityScoreAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -28,15 +30,32 @@ public class QualityScoreAgentClient implements QualityScoreAgentPort {
     private final QualityScoreAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final AgentHttpRetryer retryer;
+
+    @Autowired
+    public QualityScoreAgentClient(
+        QualityScoreAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder builder,
+        AgentHttpRetryer retryer
+    ) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.restClient = builder.baseUrl(properties.baseUrl()).build();
+        this.retryer = retryer;
+    }
 
     public QualityScoreAgentClient(
         QualityScoreAgentProperties properties,
         ObjectMapper objectMapper,
         RestClient.Builder builder
     ) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.restClient = builder.baseUrl(properties.baseUrl()).build();
+        this(
+            properties,
+            objectMapper,
+            builder,
+            new AgentHttpRetryer(new AgentHttpClientProperties(5, 300, 1, 0))
+        );
     }
 
     @Override
@@ -63,20 +82,20 @@ public class QualityScoreAgentClient implements QualityScoreAgentPort {
 
     private JsonNode post(Map<String, Object> payload) {
         try {
-            JsonNode body = restClient.post()
+            JsonNode body = retryer.execute(() -> restClient.post()
                 .uri(properties.endpoint())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
             if (body == null || body.isNull()) {
                 throw new IllegalStateException("Quality score agent returned an empty response");
             }
             return body;
         } catch (RestClientResponseException exception) {
             throw new IllegalStateException("Quality score agent call failed. status=%s, responseBody=%s"
-                .formatted(exception.getRawStatusCode(), exception.getResponseBodyAsString()), exception);
+                .formatted(exception.getStatusCode().value(), exception.getResponseBodyAsString()), exception);
         } catch (RestClientException exception) {
             throw new IllegalStateException("Failed to call quality score agent: " + exception.getMessage(), exception);
         }
@@ -143,4 +162,3 @@ public class QualityScoreAgentClient implements QualityScoreAgentPort {
     ) {
     }
 }
-

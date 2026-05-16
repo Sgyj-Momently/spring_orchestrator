@@ -9,12 +9,14 @@ import com.momently.orchestrator.application.port.out.ReviewAgentPort;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
 import com.momently.orchestrator.application.port.out.result.ReviewResult;
 import com.momently.orchestrator.application.port.out.result.StyleResult;
+import com.momently.orchestrator.config.AgentHttpClientProperties;
 import com.momently.orchestrator.config.ReviewAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -29,11 +31,28 @@ public class ReviewAgentClient implements ReviewAgentPort {
     private final ReviewAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final AgentHttpRetryer retryer;
 
-    public ReviewAgentClient(ReviewAgentProperties properties, ObjectMapper objectMapper, RestClient.Builder builder) {
+    @Autowired
+    public ReviewAgentClient(
+        ReviewAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder builder,
+        AgentHttpRetryer retryer
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClient = builder.baseUrl(properties.baseUrl()).build();
+        this.retryer = retryer;
+    }
+
+    public ReviewAgentClient(ReviewAgentProperties properties, ObjectMapper objectMapper, RestClient.Builder builder) {
+        this(
+            properties,
+            objectMapper,
+            builder,
+            new AgentHttpRetryer(new AgentHttpClientProperties(5, 300, 1, 0))
+        );
     }
 
     @Override
@@ -68,16 +87,16 @@ public class ReviewAgentClient implements ReviewAgentPort {
 
     private JsonNode post(Map<String, Object> payload) {
         try {
-            JsonNode body = restClient.post().uri(properties.endpoint())
+            JsonNode body = retryer.execute(() -> restClient.post().uri(properties.endpoint())
                 .contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON)
-                .body(payload).retrieve().body(JsonNode.class);
+                .body(payload).retrieve().body(JsonNode.class));
             if (body == null || body.isNull()) {
                 throw new IllegalStateException("Review agent returned an empty response");
             }
             return body;
         } catch (RestClientResponseException exception) {
             throw new IllegalStateException("Review agent call failed. status=%s, responseBody=%s"
-                .formatted(exception.getRawStatusCode(), exception.getResponseBodyAsString()), exception);
+                .formatted(exception.getStatusCode().value(), exception.getResponseBodyAsString()), exception);
         } catch (RestClientException exception) {
             throw new IllegalStateException("Failed to call review agent: " + exception.getMessage(), exception);
         }
@@ -127,4 +146,3 @@ public class ReviewAgentClient implements ReviewAgentPort {
     record ReviewAgentResponse(@JsonProperty("issue_count") int issueCount) {
     }
 }
-

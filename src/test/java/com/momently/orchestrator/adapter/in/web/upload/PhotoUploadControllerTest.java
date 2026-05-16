@@ -12,10 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import com.momently.orchestrator.security.JwtService;
 import com.momently.orchestrator.config.MomentlyUploadProperties;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -28,13 +28,13 @@ class PhotoUploadControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private PhotoUploadService photoUploadService;
 
-    @MockBean
+    @MockitoBean
     private MomentlyUploadProperties uploadProperties;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
     @Test
