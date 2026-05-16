@@ -9,6 +9,7 @@ import com.momently.orchestrator.application.port.out.HeroPhotoAgentPort;
 import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.config.AgentHttpClientProperties;
 import com.momently.orchestrator.config.HeroPhotoAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -40,15 +42,32 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
     private final HeroPhotoAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final AgentHttpRetryer retryer;
+
+    @Autowired
+    public HeroPhotoAgentClient(
+        HeroPhotoAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder restClientBuilder,
+        AgentHttpRetryer retryer
+    ) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.retryer = retryer;
+    }
 
     public HeroPhotoAgentClient(
         HeroPhotoAgentProperties properties,
         ObjectMapper objectMapper,
         RestClient.Builder restClientBuilder
     ) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this(
+            properties,
+            objectMapper,
+            restClientBuilder,
+            new AgentHttpRetryer(new AgentHttpClientProperties(5, 300, 1, 0))
+        );
     }
 
     @Override
@@ -61,13 +80,13 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
         Path resultPath = heroPhotoResultPath(groupingResultPath);
         Map<String, Object> payload = buildPayload(projectId, photoInfoResult, groupingResultPath);
         try {
-            JsonNode responseBody = restClient.post()
+            JsonNode responseBody = retryer.execute(() -> restClient.post()
                 .uri(properties.endpoint())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
 
             if (responseBody == null || responseBody.isNull()) {
                 throw new IllegalStateException("Hero photo agent returned an empty response");
@@ -86,7 +105,7 @@ public class HeroPhotoAgentClient implements HeroPhotoAgentPort {
                     + properties.baseUrl()
                     + properties.endpoint()
                     + ", status="
-                    + exception.getRawStatusCode()
+                    + exception.getStatusCode().value()
                     + ", projectId="
                     + projectId
                     + ", groupingResultPath="

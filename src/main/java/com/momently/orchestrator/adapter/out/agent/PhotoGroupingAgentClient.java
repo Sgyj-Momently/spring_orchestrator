@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.momently.orchestrator.application.port.out.PhotoGroupingAgentPort;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.config.AgentHttpClientProperties;
 import com.momently.orchestrator.config.PhotoGroupingAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -43,6 +45,7 @@ public class PhotoGroupingAgentClient implements PhotoGroupingAgentPort {
     private final PhotoGroupingAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final AgentHttpRetryer retryer;
 
     /**
      * HTTP 클라이언트와 에이전트 설정을 생성한다.
@@ -54,14 +57,30 @@ public class PhotoGroupingAgentClient implements PhotoGroupingAgentPort {
      * @param objectMapper 사진 정보 bundle 아티팩트를 HTTP 요청 DTO로 변환하기 위한 JSON 매퍼
      * @param restClientBuilder Spring이 제공하는 HTTP 클라이언트 빌더
      */
+    @Autowired
+    public PhotoGroupingAgentClient(
+        PhotoGroupingAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder restClientBuilder,
+        AgentHttpRetryer retryer
+    ) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.retryer = retryer;
+    }
+
     public PhotoGroupingAgentClient(
         PhotoGroupingAgentProperties properties,
         ObjectMapper objectMapper,
         RestClient.Builder restClientBuilder
     ) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this(
+            properties,
+            objectMapper,
+            restClientBuilder,
+            new AgentHttpRetryer(new AgentHttpClientProperties(5, 300, 1, 0))
+        );
     }
 
     /**
@@ -88,13 +107,13 @@ public class PhotoGroupingAgentClient implements PhotoGroupingAgentPort {
         Map<String, Object> payload = buildPayload(projectId, groupingStrategy, timeWindowMinutes, photoInfoResult);
         Path resultPath = groupingResultPath(Path.of(photoInfoResult.bundlePath()));
         try {
-            JsonNode responseBody = restClient.post()
+            JsonNode responseBody = retryer.execute(() -> restClient.post()
                 .uri(properties.endpoint())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
 
             if (responseBody == null || responseBody.isNull()) {
                 throw new IllegalStateException("Photo grouping agent returned an empty response");
@@ -113,7 +132,7 @@ public class PhotoGroupingAgentClient implements PhotoGroupingAgentPort {
                     + properties.baseUrl()
                     + properties.endpoint()
                     + ", status="
-                    + exception.getRawStatusCode()
+                    + exception.getStatusCode().value()
                     + ", projectId="
                     + projectId
                     + ", groupingStrategy="

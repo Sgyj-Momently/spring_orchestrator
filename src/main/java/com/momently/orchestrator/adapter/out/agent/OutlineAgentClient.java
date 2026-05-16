@@ -10,12 +10,14 @@ import com.momently.orchestrator.application.port.out.result.HeroPhotoResult;
 import com.momently.orchestrator.application.port.out.result.OutlineResult;
 import com.momently.orchestrator.application.port.out.result.PhotoGroupingResult;
 import com.momently.orchestrator.application.port.out.result.PhotoInfoResult;
+import com.momently.orchestrator.config.AgentHttpClientProperties;
 import com.momently.orchestrator.config.OutlineAgentProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -32,15 +34,32 @@ public class OutlineAgentClient implements OutlineAgentPort {
     private final OutlineAgentProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final AgentHttpRetryer retryer;
+
+    @Autowired
+    public OutlineAgentClient(
+        OutlineAgentProperties properties,
+        ObjectMapper objectMapper,
+        RestClient.Builder restClientBuilder,
+        AgentHttpRetryer retryer
+    ) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.retryer = retryer;
+    }
 
     public OutlineAgentClient(
         OutlineAgentProperties properties,
         ObjectMapper objectMapper,
         RestClient.Builder restClientBuilder
     ) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this(
+            properties,
+            objectMapper,
+            restClientBuilder,
+            new AgentHttpRetryer(new AgentHttpClientProperties(5, 300, 1, 0))
+        );
     }
 
     @Override
@@ -60,13 +79,13 @@ public class OutlineAgentClient implements OutlineAgentPort {
         payload.put("photos", readOutlinePhotos(Path.of(photoInfoResult.bundlePath())));
 
         try {
-            JsonNode responseBody = restClient.post()
+            JsonNode responseBody = retryer.execute(() -> restClient.post()
                 .uri(properties.endpoint())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
 
             if (responseBody == null || responseBody.isNull()) {
                 throw new IllegalStateException("Outline agent returned an empty response");
@@ -94,7 +113,7 @@ public class OutlineAgentClient implements OutlineAgentPort {
                     + properties.baseUrl()
                     + properties.endpoint()
                     + ", status="
-                    + exception.getRawStatusCode()
+                    + exception.getStatusCode().value()
                     + ", projectId="
                     + projectId
                     + ", responseBody="
@@ -238,4 +257,3 @@ public class OutlineAgentClient implements OutlineAgentPort {
         }
     }
 }
-
