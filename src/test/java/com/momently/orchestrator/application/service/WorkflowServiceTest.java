@@ -29,10 +29,20 @@ class WorkflowServiceTest {
         );
 
         Workflow workflow = workflowService.createWorkflow(
-            new CreateWorkflowCommand("project-001", "LOCATION_BASED", 90)
+            new CreateWorkflowCommand(
+                "project-001",
+                "LOCATION_BASED",
+                90,
+                "voice-friendly",
+                "여행후기",
+                "동선을 자연스럽게 설명"
+            )
         );
 
         assertThat(workflow.getStatus()).isEqualTo(WorkflowStatus.CREATED);
+        assertThat(workflow.getVoiceProfileId()).isEqualTo("voice-friendly");
+        assertThat(workflow.getContentType()).isEqualTo("여행후기");
+        assertThat(workflow.getWritingInstructions()).isEqualTo("동선을 자연스럽게 설명");
     }
 
     @Test
@@ -82,6 +92,30 @@ class WorkflowServiceTest {
             .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    @DisplayName("서비스는 워크플로 기록 한 건을 삭제한다")
+    void deletesWorkflowById() {
+        InMemoryWorkflowRepositoryStub repository = new InMemoryWorkflowRepositoryStub();
+        Workflow workflow = new Workflow(UUID.randomUUID(), "project-001", "LOCATION_BASED", 90, WorkflowStatus.CREATED);
+        repository.save(workflow);
+        WorkflowService workflowService = new WorkflowService(repository, new WorkflowStateMachine());
+
+        workflowService.deleteWorkflow(workflow.getWorkflowId());
+
+        assertThat(repository.findById(workflow.getWorkflowId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("없는 워크플로 기록 삭제는 찾을 수 없음 예외를 유지한다")
+    void rejectsDeletingMissingWorkflow() {
+        WorkflowService workflowService = new WorkflowService(new InMemoryWorkflowRepositoryStub(), new WorkflowStateMachine());
+        UUID workflowId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> workflowService.deleteWorkflow(workflowId))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Workflow not found:");
+    }
+
     /**
      * 테스트 전용 메모리 저장소 구현체다.
      */
@@ -108,6 +142,11 @@ class WorkflowServiceTest {
         @Override
         public void deleteAll() {
             storage.clear();
+        }
+
+        @Override
+        public void deleteById(UUID workflowId) {
+            storage.remove(workflowId);
         }
     }
 }

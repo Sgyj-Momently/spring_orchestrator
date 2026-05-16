@@ -28,4 +28,11 @@ public interface GetWorkflowUseCase {
      * 저장된 워크플로 기록을 모두 삭제한다.
      */
     void deleteAllWorkflows();
+
+    /**
+     * 저장된 워크플로 기록 한 건을 삭제한다.
+     *
+     * @param workflowId 삭제할 워크플로 식별자
+     */
+    void deleteWorkflow(UUID workflowId);
 }

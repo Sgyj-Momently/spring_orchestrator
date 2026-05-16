@@ -47,4 +47,10 @@ public class PostgresWorkflowRepository implements WorkflowRepository {
     public void deleteAll() {
         repository.deleteAllInBatch();
     }
+
+    @Override
+    @Transactional
+    public void deleteById(UUID workflowId) {
+        repository.deleteById(workflowId);
+    }
 }

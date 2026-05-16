@@ -115,4 +115,14 @@ class PostgresWorkflowRepositoryTest {
 
         verify(springDataRepository).deleteAllInBatch();
     }
+
+    @Test
+    @DisplayName("단건 삭제는 Spring Data deleteById로 위임한다")
+    void deletesWorkflowById() {
+        UUID workflowId = UUID.randomUUID();
+
+        repository.deleteById(workflowId);
+
+        verify(springDataRepository).deleteById(workflowId);
+    }
 }

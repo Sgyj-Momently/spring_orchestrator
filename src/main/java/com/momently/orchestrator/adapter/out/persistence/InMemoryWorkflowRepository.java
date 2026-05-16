@@ -58,4 +58,9 @@ public class InMemoryWorkflowRepository implements WorkflowRepository {
     public void deleteAll() {
         storage.clear();
     }
+
+    @Override
+    public void deleteById(UUID workflowId) {
+        storage.remove(workflowId);
+    }
 }

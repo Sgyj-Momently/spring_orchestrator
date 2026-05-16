@@ -43,4 +43,13 @@ public interface WorkflowRepository {
      * <p>파일 시스템에 남은 산출물 삭제는 별도 책임이다.</p>
      */
     void deleteAll();
+
+    /**
+     * 저장된 워크플로 메타데이터 한 건을 삭제한다.
+     *
+     * <p>파일 시스템에 남은 산출물 삭제는 별도 책임이다.</p>
+     *
+     * @param workflowId 삭제할 워크플로 식별자
+     */
+    void deleteById(UUID workflowId);
 }
