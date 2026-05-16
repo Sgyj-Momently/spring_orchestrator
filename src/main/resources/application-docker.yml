@@ -41,8 +41,15 @@ momently:
         - http://127.0.0.1:${MOMENTLY_CONSOLE_DEV_PORT:5173}
         - http://localhost:${MOMENTLY_CONSOLE_DEV_PORT:5173}
         - "${MOMENTLY_PUBLIC_ORIGIN:https://momently.tpsg.co.kr}"
+  artifacts:
+    max-edit-versions: ${MOMENTLY_ARTIFACT_MAX_EDIT_VERSIONS:20}
 
 agents:
+  http:
+    connect-timeout-seconds: ${MOMENTLY_AGENT_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${MOMENTLY_AGENT_READ_TIMEOUT_SECONDS:300}
+    max-attempts: ${MOMENTLY_AGENT_MAX_ATTEMPTS:2}
+    backoff-millis: ${MOMENTLY_AGENT_BACKOFF_MILLIS:250}
   photo-info:
     pipeline:
       python-executable: ${PHOTO_PIPELINE_PYTHON_EXECUTABLE:python3}
