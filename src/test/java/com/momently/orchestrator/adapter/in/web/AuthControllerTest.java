@@ -9,8 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momently.orchestrator.adapter.in.web.request.LoginRequest;
+import com.momently.orchestrator.adapter.in.web.request.RegisterRequest;
 import com.momently.orchestrator.config.MomentlySecurityProperties;
 import com.momently.orchestrator.security.AuthService;
+import com.momently.orchestrator.security.DuplicateUsernameException;
+import com.momently.orchestrator.security.SignupDisabledException;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -88,6 +91,77 @@ class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"username":"   ","password":""}
+                    """))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("회원가입 성공 시 토큰과 만료 시간을 반환한다")
+    void returnsTokenWhenRegisterOk() throws Exception {
+        when(authService.registerAndIssueToken(anyString(), anyString(), anyString()))
+            .thenReturn("signed-register-jwt");
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(MAPPER.writeValueAsString(
+                    new RegisterRequest("member", "new-password", "invite-123"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").value("signed-register-jwt"))
+            .andExpect(jsonPath("$.tokenType").value("Bearer"))
+            .andExpect(jsonPath("$.expiresInSeconds").value(3600));
+
+        verify(authService).registerAndIssueToken("member", "new-password", "invite-123");
+    }
+
+    @Test
+    @DisplayName("회원가입이 꺼져 있으면 404를 반환한다")
+    void returnsNotFoundWhenSignupDisabled() throws Exception {
+        when(authService.registerAndIssueToken(anyString(), anyString(), anyString()))
+            .thenThrow(new SignupDisabledException());
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(MAPPER.writeValueAsString(
+                    new RegisterRequest("member", "new-password", "invite-123"))))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    @DisplayName("중복 아이디 회원가입은 409를 반환한다")
+    void returnsConflictWhenUsernameDuplicate() throws Exception {
+        when(authService.registerAndIssueToken(anyString(), anyString(), anyString()))
+            .thenThrow(new DuplicateUsernameException("member"));
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(MAPPER.writeValueAsString(
+                    new RegisterRequest("member", "new-password", "invite-123"))))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    @DisplayName("초대 코드 오류는 400을 반환한다")
+    void returnsBadRequestWhenInviteInvalid() throws Exception {
+        when(authService.registerAndIssueToken(anyString(), anyString(), anyString()))
+            .thenThrow(new IllegalArgumentException("초대 코드가 올바르지 않습니다."));
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(MAPPER.writeValueAsString(
+                    new RegisterRequest("member", "new-password", "wrong"))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("초대 코드가 올바르지 않습니다."));
+    }
+
+    @Test
+    @DisplayName("회원가입 요청 검증 오류 시 400")
+    void rejectsBlankRegisterFields() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"member","password":"short","inviteCode":""}
                     """))
             .andExpect(status().isBadRequest());
     }

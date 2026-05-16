@@ -39,4 +39,13 @@ class MomentlySecurityPropertiesTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("32");
     }
+
+    @Test
+    @DisplayName("초대 코드가 있을 때만 회원가입이 활성화된다")
+    void detectsSignupAvailability() {
+        assertThat(new MomentlySecurityProperties("u", "p", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 3600)
+            .signupEnabled()).isFalse();
+        assertThat(new MomentlySecurityProperties("u", "p", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 3600, "invite")
+            .signupEnabled()).isTrue();
+    }
 }

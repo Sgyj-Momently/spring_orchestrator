@@ -24,6 +24,7 @@ momently:
     password: changeme
     jwt-secret: local-dev-console-jwt-signing-secret-min32b
     jwt-expiration-seconds: 86400
+    signup-invite-code: ""
   upload:
     max-files: 40
     max-bytes-per-file: 26214400
